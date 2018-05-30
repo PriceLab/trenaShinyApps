@@ -57,11 +57,13 @@ ui <- fluidPage(
                      "Full RIN3 enhancers region"="all.RIN3.enhancers")),
 
        selectInput("addTrack", "Add Track:",
-                   c(" - ", "noTrackYet",
+                   c(" - ",
                      "enahancers"="enhancers",
                      "IGAP GWAS SNPs"="snps",
                      "TSS"="tss",
-                     "open chromatin"="dhs")),
+                     "open chromatin"="dhs",
+                     "SNPs in TF binding sites"="snpsInBindingSites")),
+
         selectInput("geneModel", "Choose model:",
                     modelList
                     # c("fp.2000up.200down.cor02"="fp.2000up.200down.cor02",
@@ -83,7 +85,7 @@ ui <- fluidPage(
        tabsetPanel(type="tabs",
                    id="trenaTabs",
                    tabPanel(title="IGV",             value="igvTab",       igvShinyOutput('igvShiny')),
-                   tabPanel(title="READ ME",         value="readmeTab",    verbatimTextOutput("summary")),
+                   tabPanel(title="READ ME",   includeHTML("readme.html")), #value="readmeTab",    verbatimTextOutput("summary")),
                    tabPanel(title="TRN",             value="snpTableTab",  DTOutput("geneModelTable")),
                    tabPanel(title="tf/target plot",  value="plotTab",      plotOutput("xyPlot", height=800))
                    )
@@ -272,11 +274,11 @@ server <- function(input, output, session) {
         })
 
   output$summary <- renderPrint({
-    print(input$targetGene)
-    print(input$roi)
-    print(input$filters)
-    print(input$pwmMatchThreshold)
-    print(input$model.trn)
+    #print(input$targetGene)
+    #print(input$roi)
+    #print(input$filters)
+    #print(input$pwmMatchThreshold)
+    #print(input$model.trn)
     })
 
    output$geneModelTable <- renderDT(
@@ -346,6 +348,10 @@ displayTrack <- function(session, trackName)
                                               color="red",
                                               trackHeight=40)))
       } # snps
+
+   if(trackName == "snpsInBindingSites"){
+      printf("find and display snps in binding sites")
+      } # snpsInBindingSites
 
    if("enhancers" %in% trackName){
       load("tbl.enhancers.RData")
