@@ -1,6 +1,13 @@
 library(trenaSGM)
 library(igvR)
 library(motifStack)
+library(motifbreakR)
+library(SNPlocs.Hsapiens.dbSNP150.GRCh38)
+library(BSgenome.Hsapiens.UCSC.hg38)
+
+  #   pcm <- new("pcm", mat=pfms[[1]], name=names(pfms)); plot(pcm)
+  #   motifStack(lapply(names(x), function(mName) new("pfm", x[[mName]], name=mName)))
+
 source("~/github/trenaShinyApps/utils/getEnhancers.R")
 library(FimoClient)
 library(GenomicRanges)
@@ -575,4 +582,71 @@ disruptionStudy <- function()
    #                                                                                                 rc ACAGAAAACATCAGCTCCCC
 
 } # disruptionStudy
+#------------------------------------------------------------------------------------------------------------------------
+dhs <- function()
+{
+   hdf <- HumanDHSFilter("hg38", "wgEncodeRegDnaseClustered", pwmMatchPercentageThreshold=0,
+                         geneInfoDatabase.uri="bogus", regions=data.frame(), pfms=list())
+   chrom <- "chr14"
+   start <- 91654248
+   end <-   93010778
+   tbl.dhs <- getRegulatoryRegions(hdf, "wgEncodeRegDnaseClustered", chrom, start, end)
+   colnames(tbl.dhs) <- c("chrom", "start", "end", "count", "score")
+   save(tbl.dhs, file="../shinyApp/tbl.dhs.RData")
+
+} # dhs
+#------------------------------------------------------------------------------------------------------------------------
+findAllBindingSitesForAllTFsInSummaryTable <- function()
+{
+   tfs <- tbl.summary$gene
+   mdb.base <- query(MotifDb, "sapiens", c("jaspar2018", "hocomoco", "swissregulon"))
+   mdb.tfs <- query(mdb.base, "", tfs)
+   setdiff(tfs, mcols(mdb.tfs)$geneSymbol)    # 3 expression-only tfs not found: "AKNA"   "KLHL6"  "SP140L"
+   export(mdb.tfs, "~/github/fimoService/pfms/rin3.trena.pfms.meme", 'meme')
+
+   chrom <- "chr14"
+   start <- 91654248
+   end <-   93010778
+   tbl.sequence <- getSequence(mm, data.frame(chrom=chrom, start=start, end=end))
+   checkEquals(nchar(tbl.sequence$seq[1]), 1 + end - start)
+   tbl.matches <- requestMatch(fimo, list(big=tbl.sequence$seq[1]))
+   tf <- mcols(mdb.tfs[tbl.matches$motif])$geneSymbol
+   tbl.matches$tf <- tf    # 19832 x 10
+   coi <- c("chrom", "start", "stop", "strand", "motif", "score", "p.value", "q.value", "tf", "matched.sequence")
+   tbl.matches <- tbl.matches[, coi]
+   colnames(tbl.matches)[3] <- "end"
+   colnames(tbl.matches)[5] <- "name"
+   save(tbl.matches, file="../shinyApp/sequenceMatchesForTfsInModel.RData")
+
+} # findAllBindingSitesForAllTFsInSummaryTable
+#------------------------------------------------------------------------------------------------------------------------
+test.motifBreaker <- function()
+{
+   snp <- "rs10130041"
+   snps.gr <- snps.from.rsid(rsid = snp,
+                            dbSNP=SNPlocs.Hsapiens.dbSNP150.GRCh38,
+                            search.genome=BSgenome.Hsapiens.UCSC.hg38)
+   results <- motifbreakR(snpList = snps.gr, filterp = TRUE,
+                          pwmList = MotifDb["Hsapiens-jaspar2018-RREB1-MA0073.1"],
+                          threshold = 0,
+                          method = "ic",
+                          bkg = c(A=0.25, C=0.25, G=0.25, T=0.25),
+                          BPPARAM = BiocParallel::bpparam())
+
+    #  rs2402140
+    # chr14:92,432,733-92,432,754
+    seq <- getSequence(mm, data.frame(chrom="chr14", start=92432730, end=92432755))
+    seq.mut <- getSequence(mm, data.frame(chrom="chr14", start=92432730, end=92432755), variants="rs2402140")
+      # seq.mut$seq:    "CTGGGGAGCTGATGTTTTCTGTGGCT"
+      # seq$seq:        "CTGGGGAGCTGGTGTTTTCTGTGGCT"
+
+   requestMatch(fimo, list(wt=seq$seq, mut=seq.mut$seq))
+     # 1 Hsapiens-HOCOMOCOv10-RREB1_HUMAN.H10MO.D            wt     2   23      + 16.977800 9.17e-07 1.83e-05 TGGGGAGCTGGTGTTTTCTGTG
+     # 2 Hsapiens-SwissRegulon-RREB1.SwissRegulon            wt     2   23      + 16.733300 1.01e-06 2.02e-05 TGGGGAGCTGGTGTTTTCTGTG
+     # 3       Hsapiens-jaspar2018-RREB1-MA0073.1            wt     3   22      -  9.707870 5.22e-06 1.46e-04   ACAGAAAACACCAGCTCCCC
+     # 4       Hsapiens-jaspar2018-RREB1-MA0073.1           mut     3   22      - -0.640449 8.68e-05 1.22e-03   ACAGAAAACATCAGCTCCCC
+
+
+
+} # test.motifBreaker
 #------------------------------------------------------------------------------------------------------------------------

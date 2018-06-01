@@ -28,9 +28,11 @@ model.names <- names(rin3.models)
 for(model.name in model.names){
    modelList <- c(modelList, eval(parse(text=sprintf('c("%s"="%s")', model.name, model.name))))
    }
-if(!exists("tbl.gwas.rin3"))
+if(!exists("tbl.gwas.rin3")){
    load("tbl.gwas.rin3.RData")
-
+   tbl.snps <- tbl.gwas.rin3[, c("CHR", "BP", "BP", "SNP", "P")]
+   colnames(tbl.snps) <- c("chrom", "start", "end", "id", "pval")
+   }
 #----------------------------------------------------------------------------------------------------
 ui <- fluidPage(
 
@@ -52,17 +54,9 @@ ui <- fluidPage(
        #             max = 100),
        selectInput("displayGenomicRegion", "Display Genomic Region:",
                    c(" - " = "noRegionYet",
-                     "RIN3"="RIN3",
+                     "RIN3 (entire gene)"="RIN3",
                      "RIN3 10kb promoter"="RIN3.10kb.promoter",
                      "Full RIN3 enhancers region"="all.RIN3.enhancers")),
-
-       selectInput("addTrack", "Add Track:",
-                   c(" - ",
-                     "enahancers"="enhancers",
-                     "IGAP GWAS SNPs"="snps",
-                     "TSS"="tss",
-                     "open chromatin"="dhs",
-                     "SNPs in TF binding sites"="snpsInBindingSites")),
 
         selectInput("geneModel", "Choose model:",
                     modelList
@@ -77,9 +71,27 @@ ui <- fluidPage(
                     #   "fp.enhancers.cor02.5kup.5kdown"="fp.enhancers.cor02.5kup.5kdown",
                     #   "regions.motifMatching.enhancers.5kbup.5kbdown.pwm80.cor04"="regions.motifMatching.enhancers.5kbup.5kbdown.pwm80.cor04"
                     #   )
-                    )
-
-        ),
+                    ),
+       selectInput("addTrack", "Add Track:",
+                   c(" - ",
+                     "Enhancers"="enhancers",
+                     "DHS (wgEncodeClustered)"="dhs",
+                     "IGAP GWAS SNPs"="snps",
+                     "open chromatin"="dhs")),
+       sliderInput("IGAP.snp.significance", "-log10(GWAS SNP qval)",
+                    value = 2,
+                    min = 0,
+                    max = 12),
+       sliderInput("fimo.motif.significance", "-log10(FIMO motif pval)",
+                    value = 5,
+                    min = 0,
+                    max = 12),
+       sliderInput("fimo.snp.effect", "-log10(FIMO SNP effect) - delta qval",
+                    value = 2,
+                    min = 0,
+                   max = 12),
+        actionButton("findDisruptiveSNPsButton", "Find SNPs which disrupt TF binding sites")
+        ), # sidebarPanel
 
      mainPanel(
        tabsetPanel(type="tabs",
@@ -104,9 +116,47 @@ server <- function(input, output, session) {
     # has reactive children  plot, summary, table, below, which mention it
     # thereby establishing the reactive chain.
 
+   observeEvent(input$trackClick, {
+      printf("browser snp click observed!")
+      print(input$trackClick)
+      })
+
    observeEvent(input$geneModel, {
       printf("geneModel event: %s", input$geneModel);
       })
+
+   observeEvent(input$findDisruptiveSNPsButton, {
+      load("sequenceMatchesForTfsInModel.RData")   # calculated with fimo using only TFs in model
+      motif.pval.threshold <- isolate(session$input$fimo.motif.significance)
+      snpGWAS.pval.threshold <- isolate(session$input$IGAP.snp.significance)
+      snpEffect.pval.threshold <- isolate(session$input$fimo.snp.effect)
+      printf("motif: %f  snp: %f   disruption delta: %f", motif.pval.threshold, snpGWAS.pval.threshold, snpEffect.pval.threshold)
+      #browser()
+         # tbl.matches: of model's tfs' motifs to the full sequence around gene
+      tbl.matches.filtered <- subset(tbl.matches, -log10(p.value) >= motif.pval.threshold)
+      printf("  %d bs below p.value threshold", nrow(tbl.matches.filtered))
+      tbl.snps.filtered <- tbl.snps #subset(tbl.snps, -log10(pval) >= snpGWAS.pval.threshold)
+      gr.matches <- GRanges(tbl.matches.filtered)
+      gr.snps <- GRanges(tbl.snps.filtered)
+      tbl.ov <- as.data.frame(findOverlaps(gr.snps, gr.matches))
+      colnames(tbl.ov) <- c("snp", "bindingSite")
+      tbl.bs <- cbind(tbl.matches.filtered[tbl.ov$bindingSite,], tbl.snps.filtered[tbl.ov$snp,])
+      tfs.with.snps <- unique(tbl.bs$tf)
+      printf("--- tfs.with snps: %s", paste(tfs.with.snps, collapse=", "))
+      for(tf.with.snp in tfs.with.snps){
+         tbl.tf <- subset(tbl.bs, tf==tf.with.snp)[, c("chrom", "start", "end", "name", "q.value", "pval")]
+         tbl.tf$name <- sprintf("tfbs-snp:%s", tbl.tf$name)
+         temp.filename <- tempfile(tmpdir="./tmp", fileext=".bed")
+         write.table(tbl.tf, sep="\t", row.names=FALSE, col.names=FALSE, quote=FALSE, file=temp.filename)
+         session$sendCustomMessage(type="displayBedTrack",
+                                message=(list(filename=temp.filename,
+                                              trackName=tf.with.snp,
+                                              displayMode="EXPANDED",
+                                              color="blue",
+                                              trackHeight=40)))
+         } # for tf
+      }) #
+
 
    observeEvent(input$displayGenomicRegion, {
       printf("display event: %s", input$displayGenomicRegion)
@@ -335,8 +385,6 @@ removeTrack <- function(session, trackName)
 displayTrack <- function(session, trackName)
 {
    if("snps" %in% trackName){
-      tbl.snps <- tbl.gwas.rin3[, c("CHR", "BP", "BP", "SNP")]
-      colnames(tbl.snps) <- c("chrom", "start", "end", "id")
       temp.filename <- tempfile(tmpdir="./tmp", fileext=".bed")
       printf("-- writing %d gwas snps to %s", nrow(tbl.snps), temp.filename)
       write.table(tbl.snps, sep="\t", row.names=FALSE, col.names=FALSE, quote=FALSE, file=temp.filename)
@@ -349,9 +397,36 @@ displayTrack <- function(session, trackName)
                                               trackHeight=40)))
       } # snps
 
-   if(trackName == "snpsInBindingSites"){
-      printf("find and display snps in binding sites")
-      } # snpsInBindingSites
+   if(trackName == "snpsPlusBindingSites"){
+      # printf("find and display snps in binding sites")
+      # load("sequenceMatchesForTfsInModel.RData")
+      # motif.qval.threshold <- isolate(session$input$fimo.motif.significance)
+      # snpGWAS.pval.threshold <- isolate(session$input$IGAP.snp.significance)
+      # snpEffect.pval.threshold <- isolate(session$input$fimo.snp.effect)
+      # printf("motif: %f  snp: %f   disruption delta: %f", motif.qval.threshold, snpGWAS.pval.threshold, snpEffect.pval.threshold)
+      # browser()
+      # tbl.matches <- subset(tbl.matches, q.value < 0.05)
+      # printf("  %d bs below q.value threshold", nrow(tbl.matches))
+      # gr.matches <- GRanges(tbl.matches)
+      # gr.snps <- GRanges(tbl.snps)
+      # tbl.ov <- as.data.frame(findOverlaps(gr.snps, gr.matches))
+      # colnames(tbl.ov) <- c("snp", "bindingSite")
+      # tbl.bs <- cbind(tbl.matches[tbl.ov$bindingSite,], tbl.snps[tbl.ov$snp,])
+      # tfs.with.snps <- unique(tbl.bs$tf)
+      # printf("--- tfs.with snps: %s", paste(tfs.with.snps, collapse=", "))
+      # for(tf.with.snp in tfs.with.snps){
+      #    tbl.tf <- subset(tbl.bs, tf==tf.with.snp)[, c("chrom", "start", "end", "name", "q.value", "pval")]
+      #    tbl.tf$name <- sprintf("tfbs-snp:%s", tbl.tf$name)
+      #    temp.filename <- tempfile(tmpdir="./tmp", fileext=".bed")
+      #    write.table(tbl.tf, sep="\t", row.names=FALSE, col.names=FALSE, quote=FALSE, file=temp.filename)
+      #    session$sendCustomMessage(type="displayBedTrack",
+      #                           message=(list(filename=temp.filename,
+      #                                         trackName=tf.with.snp,
+      #                                         displayMode="EXPANDED",
+      #                                         color="blue",
+      #                                         trackHeight=40)))
+      #    } # for tf
+       } # snpsInBindingSites
 
    if("enhancers" %in% trackName){
       load("tbl.enhancers.RData")
@@ -366,6 +441,19 @@ displayTrack <- function(session, trackName)
                                               trackHeight=40)))
       } # enhancers
 
+   if(trackName == "dhs"){
+      load("tbl.dhs.RData")
+      temp.filename <- tempfile(tmpdir="./tmp", fileext=".bed")
+      write.table(tbl.dhs, sep="\t", row.names=FALSE, col.names=FALSE, quote=FALSE, file=temp.filename)
+      printf(" dhs, custom message, displayBedTrack: %s", temp.filename);
+      session$sendCustomMessage(type="displayBedTrack",
+                                message=(list(filename=temp.filename,
+                                              trackName="DHS",
+                                              color="gray",
+                                              displayMode="SQUISHED",
+                                              trackHeight=30)))
+      } # dhs
+
    if("tss" %in% trackName) {
       tss <- mef2c@misc.data$TSS
       tbl.tss <- data.frame(chrom="chr5", start=tss, end=tss, stringsAsFactors=FALSE)
@@ -377,17 +465,6 @@ displayTrack <- function(session, trackName)
                                               color="blue",
                                               trackHeight=40)))
      } # tss
-
-    if("dhs" %in% trackName){
-      tbl.dhs <- mef2c@misc.data$tbl.dhs
-      temp.filename <- sprintf("igvdata/tmp%d.bed", as.integer(Sys.time()))
-      write.table(tbl.dhs, sep="\t", row.names=FALSE, col.names=FALSE, quote=FALSE, file=temp.filename)
-      session$sendCustomMessage(type="displayBedTrack",
-                                message=(list(filename=temp.filename,
-                                              trackName="DHS",
-                                              color="darkGreen",
-                                              trackHeight=40)))
-      } # dhs
 
     if("fp" %in% trackName){
       roi <- list(chrom="chr5", start=88391000, end=89322000)

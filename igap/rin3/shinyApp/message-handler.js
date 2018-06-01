@@ -43,6 +43,8 @@ function setupMessageHandlers()
     Shiny.addCustomMessageHandler("removeTrack", removeTrack);
     Shiny.addCustomMessageHandler("showGenomicRegion", showGenomicRegion);
 
+    console.log("about to add fubar click handler");
+
 } // setupMessageHandlers
 //------------------------------------------------------------------------------------------------------------------------
 function displayBedTrack(message)
@@ -132,4 +134,11 @@ function showGenomicRegion(message)
 } // displayBedTrack
 //------------------------------------------------------------------------------------------------------------------------
 setTimeout(setupMessageHandlers, 5000);
+$(document).ready(function(){
+    console.log("document ready");
+    $(".fubar").on("click", function(){
+       console.log("fubar clicked!");
+        //Shiny.onInputChange("jsValue", {"value": "hola!"});
+    });
+})
 
