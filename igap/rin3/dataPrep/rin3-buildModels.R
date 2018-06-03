@@ -1,9 +1,12 @@
+library(trena)
 library(trenaSGM)
+library(GenomicRanges)
 library(igvR)
 library(motifStack)
 library(motifbreakR)
 library(SNPlocs.Hsapiens.dbSNP150.GRCh38)
 library(BSgenome.Hsapiens.UCSC.hg38)
+library(MotifDb)
 
   #   pcm <- new("pcm", mat=pfms[[1]], name=names(pfms)); plot(pcm)
   #   motifStack(lapply(names(x), function(mName) new("pfm", x[[mName]], name=mName)))
@@ -619,6 +622,99 @@ findAllBindingSitesForAllTFsInSummaryTable <- function()
    save(tbl.matches, file="../shinyApp/sequenceMatchesForTfsInModel.RData")
 
 } # findAllBindingSitesForAllTFsInSummaryTable
+#------------------------------------------------------------------------------------------------------------------------
+addSnpsAndDisruptionScoresToAllBindingSitesForAllTFSInSummaryTable <- function()
+{
+   print(load("../shinyApp/sequenceMatchesForTfsInModel.RData"))
+   print(load("../shinyApp/tbl.gwas.rin3.RData"))
+   tbl.snps <- tbl.gwas.rin3[, c("CHR", "BP", "BP", "SNP", "P", "Non_Effect_allele", "Effect_allele", "Beta", "SE")]
+   colnames(tbl.snps) <- c("chrom", "start", "end", "rsid", "pval", "wt", "mut", "beta", "stderr")
+   gr.matches <- GRanges(tbl.matches)
+   gr.snps <- GRanges(tbl.snps)
+   tbl.ov <- as.data.frame(findOverlaps(gr.snps, gr.matches))
+   colnames(tbl.ov) <- c("snp", "bindingSite")
+   tbl.bs <- cbind(tbl.matches[tbl.ov$bindingSite,], tbl.snps[tbl.ov$snp,])
+   colnames(tbl.bs)[grep("^name$", colnames(tbl.bs))] <- "motif"
+   colnames(tbl.bs)[grep("^matched.sequence$", colnames(tbl.bs))] <- "sequence.wt"
+   colnames(tbl.bs)[grep("^id$", colnames(tbl.bs))] <- "rsid"
+
+   tfs <- sort(unique(tbl.bs$tf))
+   mdb.base <- query(MotifDb, "sapiens", c("jaspar2018", "hocomoco", "swissregulon"))
+   mdb.tfs <- query(mdb.base, "", tfs)   # 32 pfms
+
+   mm <- MotifMatcher("hg38", as.list(mdb.tfs))
+   tbl.regions <- tbl.bs[, c("chrom", "start", "end")]
+
+   sequence.mut <- vector(mode="character", length=nrow(tbl.bs))
+     # not sure where it creeps in, but our chrom locs are +1 compared to hg38 reference
+     # evident, for example, if you blat
+     # 17244 chr14 92274808 92274829    RREB1 GGCACGGGGCTGGCTCTGGGGC
+
+   tbl.regions$start <- tbl.regions$start - 1
+   tbl.regions$end   <- tbl.regions$end - 1
+   #tbl.bs$start <- tbl.bs$start - 1
+   #tbl.bs$end   <- tbl.bs$end - 1
+
+   rc <- function(seq) as.character(reverseComplement(DNAString(seq)))
+
+   for(i in seq_len(nrow(tbl.bs))){
+      strand <- tbl.bs$strand[i]
+      seq.wt <-  getSequence(mm, tbl.regions[i,])$seq
+      seq.mut <- getSequence(mm, tbl.regions[i,], tbl.bs$rsid[i])$seq
+      if(strand == "-"){
+        seq.wt <- rc(seq.wt)
+        seq.mut <- rc(seq.mut)
+        }
+      stopifnot(seq.wt == tbl.bs$sequence.wt[i])
+      printf("%2d.  wt: %s   strand: %s", i, tbl.bs$sequence.wt[i], tbl.bs$strand[i])
+      printf("    mut: %s", seq.mut)
+      #browser()
+      sequence.mut[i] <- seq.mut
+      } # for i
+
+   tbl.bs$sequence.mut <- sequence.mut
+   save(tbl.bs, file="tbl.bindingSitesWithSnps.RData")
+
+} # addSnpsAndDisruptionScoresToAllBindingSitesForAllTFSInSummaryTable
+#------------------------------------------------------------------------------------------------------------------------
+addFimoScores <- function()
+{
+   load("tbl.bindingSitesWithSnps.RData")
+   deltas <- vector(mode="numeric", length=nrow(tbl.bs))
+
+   for(i in seq_len(nrow(tbl.bs))){
+      seqs <- list(wt=tbl.bs$sequence.wt[i],  mut=tbl.bs$sequence.mut[i])
+      tbl.match <- requestMatch(fimo, seqs)
+      tbl.moi <- subset(tbl.match, motif==tbl.bs$motif[i])  # motif of interest
+      scores <- -log10(tbl.moi$p.value)
+      delta <- scores[1] - scores[2]
+      deltas[i] <- delta
+      print(tbl.bs[i, c("tf", "chrom", "start")])
+      printf("   delta: %5.2f", delta)
+      } # for i
+
+   tbl.bs$wtMutMatchDelta <- deltas
+   save(tbl.bs, file="tbl.bindingSitesWithSnpsAndDeltaScores.RData")
+   browser()
+   xyz <- "end of addFimoScores"
+
+} # addFimoScores
+#------------------------------------------------------------------------------------------------------------------------
+createMotifLogo.pngs <- function()
+{
+   load("tbl.bindingSitesWithSnpsAndDeltaScores.RData")
+   tfs <- unique(tbl.bs$tf)
+   pfms.1 <- query(MotifDb, "sapiens", c("hocomoco", "jaspar2018", "swissregulon"))
+   pfms.tf <- query(pfms.1, "", tfs)
+   length(pfms.tf)
+   for(pfm.name in names(pfms.tf)){
+      filename <- file.path("../shinyApp", "png", sprintf("%s.png", pfm.name))
+      png(filename)
+      plotMotifs(pfms.tf[pfm.name])
+      dev.off()
+      } # for i
+
+} # createMotifLogo.pngs
 #------------------------------------------------------------------------------------------------------------------------
 test.motifBreaker <- function()
 {

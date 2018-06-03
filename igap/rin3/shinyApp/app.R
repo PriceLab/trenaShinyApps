@@ -4,6 +4,8 @@ library(igvShiny)
 library(htmlwidgets)
 library(GenomicRanges)
 library(later)
+library(MotifDb)
+library(motifStack)
 #----------------------------------------------------------------------------------------------------
 targetGene <- "RIN3"
 load("rin3.models.RData")
@@ -97,8 +99,12 @@ ui <- fluidPage(
        tabsetPanel(type="tabs",
                    id="trenaTabs",
                    tabPanel(title="IGV",             value="igvTab",       igvShinyOutput('igvShiny')),
-                   tabPanel(title="READ ME",   includeHTML("readme.html")), #value="readmeTab",    verbatimTextOutput("summary")),
+                   tabPanel(title="READ ME",         includeHTML("readme.html")),
                    tabPanel(title="TRN",             value="snpTableTab",  DTOutput("geneModelTable")),
+                   tabPanel(title="SNP",             value="snpInfoTab",   mainPanel(
+                                                                              verbatimTextOutput("tfbsText"),
+                                                                              DTOutput("snpMotifTable"),
+                                                                              imageOutput("logoImage"))),
                    tabPanel(title="tf/target plot",  value="plotTab",      plotOutput("xyPlot", height=800))
                    )
        ) # mainPanel
@@ -119,6 +125,27 @@ server <- function(input, output, session) {
    observeEvent(input$trackClick, {
       printf("browser snp click observed!")
       print(input$trackClick)
+      motifName <- input$trackClick$id
+      if(grepl("^tfbs-snp", motifName)){
+         load("tbl.bindingSitesWithSnpsAndDeltaScores.RData")
+         tokens <- strsplit(motifName, ":")[[1]]
+         pfm.name <- tokens[2]
+         snp.name <- tokens[3]
+         tbl.sub <- subset(tbl.bs, motif==pfm.name & rsid==snp.name)
+         tbl.sub <- tbl.sub[, c("chrom", "start", "end", "strand", "sequence.wt", "sequence.mut", "wtMutMatchDelta")]
+         colnames(tbl.sub)[7] <- "10^x match loss"
+         output$tfbsText <- renderText({sprintf("%s   %s", pfm.name, snp.name)})
+         image.filename <- sprintf("png/%s.png", pfm.name)
+         output$snpMotifTable <- renderDT(tbl.sub, options = list(scrollX = TRUE))
+         output$logoImage <- renderImage({
+                 list(src=image.filename,
+                      contentType="image/png",
+                      width=500,
+                      height=500,
+                      alt="alt text")},
+                 deleteFile=FALSE)
+         #updateTabsetPanel(session, "trenaTabs", select="snpInfoTab");
+         } # if tfbs-snp
       })
 
    observeEvent(input$geneModel, {
@@ -141,12 +168,14 @@ server <- function(input, output, session) {
       tbl.ov <- as.data.frame(findOverlaps(gr.snps, gr.matches))
       colnames(tbl.ov) <- c("snp", "bindingSite")
       tbl.bs <- cbind(tbl.matches.filtered[tbl.ov$bindingSite,], tbl.snps.filtered[tbl.ov$snp,])
+      state[["tbl.bs"]] <- tbl.bs
       tfs.with.snps <- unique(tbl.bs$tf)
       printf("--- tfs.with snps: %s", paste(tfs.with.snps, collapse=", "))
       for(tf.with.snp in tfs.with.snps){
-         tbl.tf <- subset(tbl.bs, tf==tf.with.snp)[, c("chrom", "start", "end", "name", "q.value", "pval")]
-         tbl.tf$name <- sprintf("tfbs-snp:%s", tbl.tf$name)
+         tbl.tf <- subset(tbl.bs, tf==tf.with.snp)[, c("chrom", "start", "end", "name", "q.value", "pval", "id")]
+         tbl.tf$name <- sprintf("tfbs-snp:%s:%s", tbl.tf$name, tbl.tf$id)
          temp.filename <- tempfile(tmpdir="./tmp", fileext=".bed")
+         #browser()
          write.table(tbl.tf, sep="\t", row.names=FALSE, col.names=FALSE, quote=FALSE, file=temp.filename)
          session$sendCustomMessage(type="displayBedTrack",
                                 message=(list(filename=temp.filename,
