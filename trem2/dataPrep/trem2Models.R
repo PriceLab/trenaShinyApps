@@ -1,4 +1,4 @@
-library(trenaSGM)
+ibrary(trenaSGM)
 library(motifStack)
 #------------------------------------------------------------------------------------------------------------------------
 genome <- "hg38"
@@ -209,6 +209,50 @@ regions.motifMatching.2kup.200down.pwm95.cor02 <- function()
 
 } # regions.motifMatching.2kup.200down.pwm95.cor02
 #------------------------------------------------------------------------------------------------------------------------
+regions.motifMatching.enhancers.5kbup.5kbdown.pwm80.cor04 <- function()
+{
+   tbl.regions <- rbind(getEnhancerRegions(targetGene),
+                        data.frame(chrom=chromosome, start=tss-5000, end=tss+5000, stringsAsFactors=FALSE))
+
+   spec <- list(title="rmm.enhancers,5kup.5kdown",
+                type="regions.motifMatching",
+                tss=tss,
+                regions=tbl.regions,
+                matrix=mtx,
+                pfms=query(MotifDb, "sapiens", "jaspar2018"),
+                matchThreshold=80,
+                motifDiscovery="matchPWM",
+                tfMapping=c("MotifDb", "TFClass"),
+                tfPrefilterCorrelation=0.4,
+                orderModelByColumn="rfScore",
+                solverNames=c("lasso", "lassopv", "pearson", "randomForest", "ridge", "spearman"))
+
+
+   return(spec)
+
+} # regions.motifMatching.enhancers.5kbup.5kbdown.pwm80.cor04
+#------------------------------------------------------------------------------------------------------------------------
+regions.motifMatching.snpEnhancerOnly <- function()
+{
+   tbl.regions <- data.frame(chrom=chromosome, start=41182688, end=41183027, stringsAsFactors=FALSE)
+
+   spec <- list(title="rmm.snpEnhancerOnly",
+                type="regions.motifMatching",
+                tss=tss,
+                regions=tbl.regions,
+                matrix=mtx,
+                pfms=query(MotifDb, "sapiens", "jaspar2018"),
+                matchThreshold=85,
+                motifDiscovery="matchPWM",
+                tfMapping=c("MotifDb", "TFClass"),
+                tfPrefilterCorrelation=0.4,
+                orderModelByColumn="rfScore",
+                solverNames=c("lasso", "lassopv", "pearson", "randomForest", "ridge", "spearman"))
+
+   return(spec)
+
+} # regions.motifMatching.snpEnhancerOnly
+#------------------------------------------------------------------------------------------------------------------------
 noDNA.allTFs.cor04 <- function()
 {
    tbl.regions <- data.frame(chrom=chromosome, start=tss-200, end=tss+2000, stringsAsFactors=FALSE)
@@ -236,8 +280,12 @@ run <- function()
    models.07 <- calculate(sgm, list(regions.motifMatching.2kup.200down.pwm95.cor02=regions.motifMatching.2kup.200down.pwm95.cor02()))
    models.08 <- calculate(sgm, list(noDNA.allTFs.cor04=noDNA.allTFs.cor04()))
    models.09 <- calculate(sgm, list(fp.enhancers.cor02.5kup.5kdown=fp.enhancers.cor02.5kup.5kdown()))
-
+   models.10 <- calculate(sgm, list(regions.motifMatching.enhancers.5kbup.5kbdown.pwm80.cor04=
+                                       regions.motifMatching.enhancers.5kbup.5kbdown.pwm80.cor04()))
    all.models <- c(models.01, models.02, models.03, models.04, models.05, models.06, models.07, models.08, models.09)
+
+   model.small <- calculate(sgm, list(regions.motifMatching.snpEnhancerOnly=regions.motifMatching.snpEnhancerOnly()))
+
    tbl.summary <- summarizeModels(sgm, orderBy="rfScore", maxTFpredictors=10, all.models)
 
    for(i in seq_len(length(all.models))){

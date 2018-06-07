@@ -3,18 +3,31 @@ library(DT)
 library(igvShiny)
 library(htmlwidgets)
 library(GenomicRanges)
+library(later)
+library(MotifDb)
+library(motifStack)
 #----------------------------------------------------------------------------------------------------
-
 
   # "tbl.model.enhancerAll.mdb"  "tbl.model.enhancerAll.tfc"
   # "tbl.motifs.enhancerAll.mdb" "tbl.motifs.enhancerAll.tfc"
   # "tbl.enhancer"
 
-
-
 load("trem2-models.RData")
 models <- all.models
+load("dhs.RData") # tbl.dhs
 addResourcePath("tmp", "tmp") # so the shiny webserver can see, and return track files for igv
+
+model.names <- names(all.models)
+modelList <- list()
+for(model.name in model.names){
+   modelList <- c(modelList, eval(parse(text=sprintf('c("%s"="%s")', model.name, model.name))))
+  }
+
+#if(exists("tbl.summary")){
+#   modelList$summary <- "summary"
+#   all.models[["summary"]] <- list(model=tbl.summary)
+#   }
+
 #----------------------------------------------------------------------------------------------------
 currentFilters <- list()
 currentShoulder <- 0
@@ -39,36 +52,44 @@ ui <- fluidPage(
   sidebarLayout(
      sidebarPanel(
         width=3,
-        selectInput("geneModel", "Choose model:",
-                    c("fp.2000up.200down.cor02"="fp.2000up.200down.cor02",
-                      "fp.10kup.10kdown.cor02"="fp.10kup.10kdown.cor02",
-                      "fp.enhancers.cor02"="fp.enhancers.cor02",
-                      "regions.motifMatching.5kup.5kdown.pwm80.cor02"="regions.motifMatching.5kup.5kdown.pwm80.cor02",
-                      "regions.motifMatching.2kup.200down.pwm80.cor02"="regions.motifMatching.2kup.200down.pwm80.cor02",
-                      "regions.motifMatching.2kup.200down.pwm90.cor02"="regions.motifMatching.2kup.200down.pwm90.cor02",
-                      "regions.motifMatching.2kup.200down.pwm95.cor02"="regions.motifMatching.2kup.200down.pwm95.cor02",
-                      "noDNA.allTFs.cor04"="noDNA.allTFs.cor04",
-                      "fp.enhancers.cor02.5kup.5kdown"="fp.enhancers.cor02.5kup.5kdown",
-                      "Summary Model (of above 9)" = "summary"
-                      )),
+        selectInput("displayGenomicRegion", "Display Genomic Region:",
+                    c("TREM2 2200 bp promoter"="promoter2200",
+                      "TREM2 10kb promoter"="promoter10kb",
+                      "TREM gene family overview"="overview")),
 
-        sliderInput("pwmMatchThreshold",
-                    "PWM match threshold",
-                    value = 90,
-                    min = 75,
-                    max = 100),
-        actionButton("showTargetGeneButton", "Show TREM2"),
-        actionButton("showSNPsButton", "SNPs"),
-        actionButton("showEnhancersButton", "Enhancers")
+        selectInput("geneModel", "Choose model:", modelList),
+
+        selectInput("addTrack", "Add Track:",
+                   c(" - ",
+                     "TREM2 Enhancers"="trem2.enhancers",
+                     "TREML1 Enhancers"="treml1.enhancers",
+                     "DHS (wgEncodeClustered)"="dhs",
+                     "IGAP GWAS SNPs"="snps",
+                     "Carrasquillo 2016 eqtl snps"="eqtl.snps"
+                     )),
+
+       sliderInput("IGAP.snp.significance", "-log10(GWAS SNP qval)",
+                    value = 2,
+                    min = 0,
+                    max = 12),
+       sliderInput("fimo.motif.significance", "-log10(FIMO motif pval)",
+                    value = 5,
+                    min = 0,
+                    max = 12),
+       sliderInput("fimo.snp.effect", "-log10(FIMO SNP effect) - delta qval",
+                    value = 2,
+                    min = 0,
+                   max = 12),
+        actionButton("findDisruptiveSNPsButton", "Find SNPs which disrupt TF binding sites")
         ),
 
      mainPanel(
        tabsetPanel(type="tabs",
                    id="trenaTabs",
-                   tabPanel(title="IGV",     value="igvTab",       igvShinyOutput('igvShiny')),
-                   tabPanel(title="Summary", value="summaryTab",   verbatimTextOutput("summary")),
-                   tabPanel(title="TRN",     value="snpTableTab",  DTOutput("geneModelTable")),
-                   tabPanel(title="tf/target plot",  value="plotTab",      plotOutput("xyPlot", height=800))
+                   tabPanel(title="IGV",     value="igvTab",          igvShinyOutput('igvShiny')),
+                   tabPanel(title="Summary", value="summaryTab",      verbatimTextOutput("summary")),
+                   tabPanel(title="TRN",     value="geneModelTab",     DTOutput("geneModelTable")),
+                   tabPanel(title="tf/target plot",  value="plotTab", plotOutput("xyPlot", height=800))
                    )
        ) # mainPanel
     ) # sidebarLayout
@@ -78,6 +99,7 @@ ui <- fluidPage(
 server <- function(input, output, session) {
 
    session$sendCustomMessage(type="showGenomicRegion", message=(list(region="FLT1")))
+   dt.proxy <- dataTableProxy("geneModelTable")
 
     # define a reactive conductor. it returns a function, is
     # redefined with a change to dist or n
@@ -86,6 +108,7 @@ server <- function(input, output, session) {
 
    observeEvent(input$geneModel, {
       printf("geneModel event: %s", input$geneModel);
+      updateTabsetPanel(session, "trenaTabs", select="geneModelTab");
       })
 
    observeEvent(input$showTargetGeneButton, {
@@ -93,45 +116,31 @@ server <- function(input, output, session) {
      session$sendCustomMessage(type="showGenomicRegion", message=(list(region=roi)))
      })
 
-   observeEvent(input$showSNPsButton, {
-     trackName <- "snp"
-     printf("-- loading snps")
-     displayTrack(session, trackName)
-     # optionalTracks <- state[["optionalTracks"]]
-     # printf("entering button toggle, optionalTracks: ")
-     # print(optionalTracks);
-     # if(trackName %in% optionalTracks){
-     #    removeTrack(session, trackName)
-     #    optionalTracks <- optionalTracks[-grep(trackName, optionalTracks)]
-     #    }
-     # else{
-     #    displayTrack(session, trackName)
-     #    optionalTracks <- c(trackName, optionalTracks)
-     #    }
-     #  printf("--- updating optionalTracks: ")
-     #  print(optionalTracks)
-     #  state[["optionalTracks"]] <- optionalTracks
+   observeEvent(input$displayGenomicRegion, {
+      printf("display event: %s", input$displayGenomicRegion)
+      tss <- 41163186
+      regions <- list(overview="chr6:41,049,342-41,367,926",
+                      promoter2200=sprintf("chr6:%d-%d", tss-200, tss+1999),
+                      promoter10kb=sprintf("chr6:%d-%d", tss-5000, tss+4999)
+                      )
+      new.region.name <- input$displayGenomicRegion
+      if(!new.region.name %in% names(regions))
+         return()
+      roi <- regions[[new.region.name]]
+      updateTabsetPanel(session, "trenaTabs", select="igvTab");
+      myFunc <- function(){
+         session$sendCustomMessage(type="showGenomicRegion", message=(list(region=roi)))
+         } # myFunc
+      later(myFunc, 0.5)
+      later(function() {updateSelectInput(session, "displayGenomicRegion", selected=character(0))}, 1)
       })
 
-   observeEvent(input$showEnhancersButton, {
-     printf("--- show enhancers")
-     displayTrack(session, "enhancers")
-     #trackName <- "enhancers"
-     #optionalTracks <- state[["optionalTracks"]]
-     #printf("entering button toggle, optionalTracks: ")
-     #print(optionalTracks);
-     #if(trackName %in% optionalTracks){
-     #   removeTrack(session, trackName)
-     #   optionalTracks <- optionalTracks[-grep(trackName, optionalTracks)]
-     #   }
-     #else{
-     #   displayTrack(session, trackName)
-     #   optionalTracks <- c(trackName, optionalTracks)
-     #   }
-     # printf("--- updating optionalTracks: ")
-     # print(optionalTracks)
-     # state[["optionalTracks"]] <- optionalTracks
+   observeEvent(input$addTrack, {
+      newTrackName <- input$addTrack
+      printf(" addTrack event: %s", newTrackName);
+      displayTrack(session, newTrackName)
       })
+
 
    observeEvent(input$findSnpsInModelButton, {
       trena.model <- isolate(input$model.trn)
@@ -144,18 +153,6 @@ server <- function(input, output, session) {
       printf("  ** pwmMatchThreshold changed");
       currentPwmMatchThreshold <- input$pwmMatchThreshold
       })
-
-   observeEvent(input$tracks, {
-     trackNames <- isolate(input$tracks)
-     printf("currentTracks: %s", paste(trackNames, collapse=","))
-     #newTracks <- setdiff(trackNames, currentTracks)
-     newTracks <-  trackNames
-     printf("newTracks: %s", paste(newTracks, collapse=","))
-     if(length(newTracks) > 0){
-        displayTrack(session, newTracks)
-        }
-     currentTracks <<- sort(unique(unlist(c(currentTracks, newTracks))))
-     })
 
    observeEvent(input$filters, {
       currentFilters <- input$filters
@@ -183,12 +180,12 @@ server <- function(input, output, session) {
       if(!is.null(selectedTableRow)){
          tbl.model <- state$currentModel
          tf <- tbl.model$gene[selectedTableRow]
-         #browser()
          if(length(tf) > 0){
             printf("table row clicked: %s", tf );
             # updatePlot(session, tf, state$currentModelName);
             updateTabsetPanel(session, "trenaTabs", select="igvTab");
-            displayBindingSites(session, input, tf) # , state$currentModelName);
+            later(function(){selectRows(dt.proxy, NULL)}, 0.5);
+            later(function(){displayBindingSites(session, input, tf)}, 1);
             }
          } # row not null
       })
@@ -231,8 +228,9 @@ server <- function(input, output, session) {
    output$geneModelTable <- renderDT(
       {model.name <- input$geneModel;
        printf("    rendering DT, presumably because input$geneModel changes, model.name: %s", model.name);
+       browser()
        selection="single"
-       tbl.model <- models[[model.name]]$model
+       tbl.model <- all.models[[model.name]]$model
        printf("data.frame dimensions: %d, %d", nrow(tbl.model), ncol(tbl.model))
        #tbl.model <- switch(model.name,
        #   "Enhancers.TFClass" = tbl.model.enhancerAll.tfc,
@@ -242,8 +240,8 @@ server <- function(input, output, session) {
       if(nrow(tbl.model) > 20)
          tbl.model <- tbl.model[1:20,]
       rownames(tbl.model) <- NULL
-      #state[["currentModel"]] <- tbl.model
-      #state[["currentModelName"]] <- model.name
+      state[["currentModel"]] <- tbl.model
+      state[["currentModelName"]] <- model.name
       return(tbl.model)
       },
     selection = 'single',
@@ -256,6 +254,38 @@ server <- function(input, output, session) {
   } # server
 
 #----------------------------------------------------------------------------------------------------
+displayTrack <- function(session, trackName)
+{
+   supportedTracks <- c("trem2.enhancers",
+                        "treml1.enhancers",
+                        "dhs",
+                        "snps",
+                        "eqtl.snps")
+
+   printf("--- displayTrack('%s')", trackName)
+
+   if(!trackName %in% supportedTracks)
+      return()
+
+   x <- switch(trackName,
+      trem2.enhancers  = {list(bed=tbl.enhancers.trem2,  name="TREM2 enhancers",   color="black")},
+      treml1.enhancers = {list(bed=tbl.enhancers.treml1, name="TREML1 enahancers", color="black")},
+      dhs              = {list(bed=tbl.dhs,              name="DHS",               color="darkgray")},
+      snps             = {list(bed=tbl.snp,              name="GWAS snp",          color="darkRed")},
+      eqtl.snps        = {list(bed=tbl.eqtl,             name="eqtl snp",          color="darkRed")}
+      )
+
+    temp.filename <- tempfile(tmpdir="tmp", fileext=".bed")
+    write.table(x$bed, sep="\t", row.names=FALSE, col.names=FALSE, quote=FALSE, file=temp.filename)
+    session$sendCustomMessage(type="displayBedTrack",
+                              message=(list(filename=temp.filename,
+                                            trackName=x$name,
+                                            displayMode="EXPANDED",
+                                            color=x$color,
+                                            trackHeight=40)))
+
+} # displayTrack
+#------------------------------------------------------------------------------------------------------------------------
 calculateVisibleSNPs <- function(targetGene, roi, filters, snpShoulder)
 {
    #return(sprintf("calculateVisibleSNPs(%s), %s, %s, %d", date(), targetGene, roi, snpShoulder))
@@ -277,136 +307,35 @@ removeTrack <- function(session, trackName)
 
 } # removeTrack
 #----------------------------------------------------------------------------------------------------
-displayTrack <- function(session, trackName)
-{
-   if("snp" %in% trackName){
-       tbl.snps <- read.table("snps.tsv", stringsAsFactors=FALSE, header=TRUE)
-      temp.filename <- tempfile(tmpdir="./tmp", fileext=".bed")
-      write.table(tbl.snps, sep="\t", row.names=FALSE, col.names=FALSE, quote=FALSE, file=temp.filename)
-      file.exists(temp.filename)
-      session$sendCustomMessage(type="displayBedTrack",
-                                message=(list(filename=temp.filename,
-                                              trackName="snp",
-                                              displayMode="EXPANDED",
-                                              color="red",
-                                              trackHeight=40)))
-      } # snps
-
-   if("enhancers" %in% trackName){
-      load("tbl.enhancers.RData")
-      temp.filename <- tempfile(tmpdir="./tmp", fileext=".bed")
-      write.table(tbl.enhancers, sep="\t", row.names=FALSE, col.names=FALSE, quote=FALSE, file=temp.filename)
-      printf(" enhancers, custom message, displayBedTrack: %s", temp.filename);
-      session$sendCustomMessage(type="displayBedTrack",
-                                message=(list(filename=temp.filename,
-                                              trackName="enhancers",
-                                              color="black",
-                                              displayMode="SQUISHED",
-                                              trackHeight=40)))
-      } # enhancers
-
-   if("tss" %in% trackName) {
-      tss <- mef2c@misc.data$TSS
-      tbl.tss <- data.frame(chrom="chr5", start=tss, end=tss, stringsAsFactors=FALSE)
-      temp.filename <- sprintf("igvdata/tmp%d.bed", as.integer(Sys.time()))
-      write.table(tbl.tss, sep="\t", row.names=FALSE, col.names=FALSE, quote=FALSE, file=temp.filename)
-      session$sendCustomMessage(type="displayBedTrack",
-                                message=(list(filename=temp.filename,
-                                              trackName="TSS",
-                                              color="blue",
-                                              trackHeight=40)))
-     } # tss
-
-    if("dhs" %in% trackName){
-      tbl.dhs <- mef2c@misc.data$tbl.dhs
-      temp.filename <- sprintf("igvdata/tmp%d.bed", as.integer(Sys.time()))
-      write.table(tbl.dhs, sep="\t", row.names=FALSE, col.names=FALSE, quote=FALSE, file=temp.filename)
-      session$sendCustomMessage(type="displayBedTrack",
-                                message=(list(filename=temp.filename,
-                                              trackName="DHS",
-                                              color="darkGreen",
-                                              trackHeight=40)))
-      } # dhs
-
-    if("fp" %in% trackName){
-      roi <- list(chrom="chr5", start=88391000, end=89322000)
-      tbl.fp <- getFootprints(mef2c, roi)[, c("chrom", "start", "end", "shortMotifName", "score")]
-      temp.filename <- sprintf("igvdata/tmp%d.bed", as.integer(Sys.time()))
-      write.table(tbl.fp, sep="\t", row.names=FALSE, col.names=FALSE, quote=FALSE, file=temp.filename)
-      session$sendCustomMessage(type="displayBedTrack",
-                                message=(list(filename=temp.filename,
-                                              trackName="Footprints",
-                                              color="gray",
-                                              trackHeight=40)))
-      } # fp
-
-    if("tfbs.model.1" %in% trackName){
-      tbl.motifs <- mef2c@misc.data[["allDNA-jaspar2018-human-mouse-motifs"]]
-      tfs <- getModels(mef2c)[["mef2c.cory.wgs.cer.tfClass"]]$gene[1:5]
-      for(tf in tfs){
-        tbl.tfbs <- get.tf.bindingSites(tf)
-        temp.filename <- sprintf("igvdata/tmp%d.bed", as.integer(Sys.time()))
-        write.table(tbl.tfbs, sep="\t", row.names=FALSE, col.names=FALSE, quote=FALSE, file=temp.filename)
-        session$sendCustomMessage(type="displayBedTrack",
-                                message=(list(filename=temp.filename,
-                                              trackName=tf,
-                                              color="darkRed",
-                                              trackHeight=40)))
-        } # for tf
-      } # tfbs.model.1
-
-    if("tfbs.model.2" %in% trackName){
-      tbl.motifs <- mef2c@misc.data[["allDNA-jaspar2018-human-mouse-motifs"]]
-      tfs <- getModels(mef2c)[["mef2c.cory.wgs.tcx.tfClass"]]$gene[1:5]
-      for(tf in tfs){
-        tbl.tfbs <- get.tf.bindingSites(tf)
-        temp.filename <- sprintf("igvdata/tmp%d.bed", as.integer(Sys.time()))
-        write.table(tbl.tfbs, sep="\t", row.names=FALSE, col.names=FALSE, quote=FALSE, file=temp.filename)
-        session$sendCustomMessage(type="displayBedTrack",
-                                message=(list(filename=temp.filename,
-                                              trackName=tf,
-                                              color="darkRed",
-                                              trackHeight=40)))
-        } # for tf
-      } # tfbs.model.2
-
-    if("tfbs.model.3" %in% trackName){
-      tbl.motifs <- mef2c@misc.data[["allDNA-jaspar2018-human-mouse-motifs"]]
-      tfs <- getModels(mef2c)[["mef2c.cory.wgs.ros.tfClass"]]$gene[1:5]
-      for(tf in tfs){
-        tbl.tfbs <- get.tf.bindingSites(tf)
-        temp.filename <- sprintf("igvdata/tmp%d.bed", as.integer(Sys.time()))
-        write.table(tbl.tfbs, sep="\t", row.names=FALSE, col.names=FALSE, quote=FALSE, file=temp.filename)
-        session$sendCustomMessage(type="displayBedTrack",
-                                message=(list(filename=temp.filename,
-                                              trackName=tf,
-                                              color="darkRed",
-                                              trackHeight=40)))
-        } # for tf
-      } # tfbs.model.3
-
-} # displayTrack
-#------------------------------------------------------------------------------------------------------------------------
 displayBindingSites <- function(session, input, tf)
 {
-   printf("--- displayBindingSites: %s, %s", tf, tf %in% names(tbls.bindingSites))
-   tbl.bindingSites <- tbls.bindingSites[[tf]]
-   threshold <- isolate(input$pwmMatchThreshold) / 100
-   printf("---  using slider threshold %f", threshold);
-   tbl.tfbs <- subset(tbl.bindingSites, motifRelativeScore >= threshold)[, c("chrom", "motifStart", "motifEnd", "motifRelativeScore")]
-   tbl.tfbs <- tbl.tfbs[order(tbl.tfbs$motifStart, decreasing=FALSE),]
+   tbl.bindingSites <- all.models[[state$currentModelName]]$regulatoryRegions
+   if(!tf %in% tbl.bindingSites$geneSymbol){
+      printf("tf %s not in regulatory regions for model '%s'", tf, state$currentModelName)
+      return()
+      }
+      # two kinds of bindingSite tables: one from footprint database (has "fp_start"), one from
+      # MotifMatcher (has "motifStart").  branch appropriately
+   if("fp_start" %in% colnames(tbl.bindingSites))
+      tbl.tfbs <- subset(tbl.bindingSites, geneSymbol==tf)[, c("chrom", "fp_start", "fp_end", "shortMotif")]
+   if("motifStart" %in% colnames(tbl.bindingSites))
+      tbl.tfbs <- subset(tbl.bindingSites, geneSymbol==tf)[, c("chrom", "motifStart", "motifEnd", "shortMotif")]
+     #threshold <- isolate(input$pwmMatchThreshold) / 100
+     # printf("---  using slider threshold %f", threshold);
+     #tbl.tfbs <- subset(tbl.bindingSites, motifRelativeScore >= threshold)[, c("chrom", "motifStart", "motifEnd", "motifRelativeScore")]
+     # tbl.tfbs <- tbl.tfbs[order(tbl.tfbs$motifStart, decreasing=FALSE),]
    printf("      found %d sites", nrow(tbl.tfbs))
    #printf("scores on binding sites: ")
    #print(fivenum(tbl.tfbs$motifRelativeScore))
-   temp.filename <- temp.filename <- tempfile(tmpdir="tmp", fileext=".bedGraph")
+   temp.filename <- tempfile(tmpdir="tmp", fileext=".bed")
    write.table(tbl.tfbs, sep="\t", row.names=FALSE, col.names=FALSE, quote=FALSE, file=temp.filename)
-   session$sendCustomMessage(type="displayBedGraphTrack",
-                             message=(list(filename=temp.filename,
-                                           trackName=sprintf("%s-%2d%%", tf, threshold * 100),
-                                           color="green",
-                                           minValue=0,
-                                           maxValue=1,
-                                           trackHeight=30)))
+   session$sendCustomMessage(type="displayBedTrack",
+                                message=(list(filename=temp.filename,
+                                              trackName=tf,
+                                              color="darkRed",
+                                              trackHeight=40)))
+
+
 
 } # displayBindingSites
 #------------------------------------------------------------------------------------------------------------------------

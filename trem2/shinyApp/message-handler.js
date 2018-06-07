@@ -61,8 +61,9 @@ function displayBedTrack(message)
                 color: message.color,
                 height: message.trackHeight,
                 type: "annotation"};
-  console.log("=== about to loadTrack");
-  console.log(config)
+
+  removeTrack(message);
+
   window.igvBrowser.loadTrack(config);
 
 } // displayBedTrack
@@ -93,8 +94,8 @@ function displayBedGraphTrack(message)
                  height: trackHeight,
                  type: "wig"};
 
-   //console.log("=== about to loadTrack");
-   //console.log(config)
+   removeTrack(message);
+
    window.igvBrowser.loadTrack(config);
 
 } // displayBedGraphTrack
