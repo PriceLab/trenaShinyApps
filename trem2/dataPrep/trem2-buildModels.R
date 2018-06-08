@@ -121,7 +121,7 @@ find.lyl1.spec <- function(mtx)
                 db.host="khaleesi.systemsbiology.net",
                 databases=list("brain_hint_20", "brain_hint_16", "brain_wellington_20", "brain_wellington_16"),
                 motifDiscovery="builtinFimo",
-                tfMapping=c("MotifDB", "TFClass"),
+                tfMapping=c("MotifDb"),
                 tfPrefilterCorrelation=0.2,
                 orderModelByColumn="rfScore",
                 solverNames=c("lasso", "lassopv", "pearson", "randomForest", "ridge", "spearman"))
@@ -142,7 +142,7 @@ fp.2000up.200down.cor02 <- function(mtx)
                 db.host="khaleesi.systemsbiology.net",
                 databases=list("brain_hint_20", "brain_hint_16", "brain_wellington_20", "brain_wellington_16"),
                 motifDiscovery="builtinFimo",
-                tfMapping=c("MotifDB", "TFClass"),
+                tfMapping=c("MotifDb"),
                 tfPrefilterCorrelation=0.2,
                 orderModelByColumn="rfScore",
                 solverNames=c("lasso", "lassopv", "pearson", "randomForest", "ridge", "spearman"))
@@ -163,7 +163,7 @@ fp.5kup.5kdown.cor02 <- function(mtx)
                 db.host="khaleesi.systemsbiology.net",
                 databases=list("brain_hint_20", "brain_hint_16", "brain_wellington_20", "brain_wellington_16"),
                 motifDiscovery="builtinFimo",
-                tfMapping=c("TFClass", "MotifDB"),
+                tfMapping=c("MotifDb"),
                 tfPrefilterCorrelation=0.2,
                 orderModelByColumn="rfScore",
                 solverNames=c("lasso", "lassopv", "pearson", "randomForest", "ridge", "spearman"))
@@ -176,7 +176,7 @@ fp.5kup.5kdown.cor02 <- function(mtx)
 #                       db.host="khaleesi.systemsbiology.net",
 #                       databases=c("brain_hint_20",  "brain_hint_16", "brain_wellington_20", "brain_wellington_16"),
 #                       motifDiscovery="builtinFimo",
-#                       tfMapping=c("TFClass", "MotifDb"),
+#                       tfMapping=c("MotifDb"),
 #                       tfPrefilterCorrelation=0.4,
 #                       orderModelByColumn="rfScore",
 #                       solverNames=c("lasso", "lassopv", "pearson", "randomForest", "ridge", "spearman"))
@@ -197,7 +197,7 @@ fp.enhancers.cor02 <- function(tbl.enhancers, mtx)
                 db.host="khaleesi.systemsbiology.net",
                 databases=list("brain_hint_20", "brain_hint_16", "brain_wellington_20", "brain_wellington_16"),
                 motifDiscovery="builtinFimo",
-                tfMapping=c("MotifDB", "TFClass"),
+                tfMapping=c("MotifDb"),
                 tfPrefilterCorrelation=0.2,
                 orderModelByColumn="rfScore",
                 solverNames=c("lasso", "lassopv", "pearson", "randomForest", "ridge", "spearman"))
@@ -221,7 +221,7 @@ fp.enhancers.cor02.5kup.5kdown <- function()
                 db.host="khaleesi.systemsbiology.net",
                 databases=list("brain_hint_20", "brain_hint_16", "brain_wellington_20", "brain_wellington_16"),
                 motifDiscovery="builtinFimo",
-                tfMapping=c("MotifDB", "TFClass"),
+                tfMapping=c("MotifDb"),
                 tfPrefilterCorrelation=0.2,
                 orderModelByColumn="rfScore",
                 solverNames=c("lasso", "lassopv", "pearson", "randomForest", "ridge", "spearman"))
@@ -243,7 +243,7 @@ regions.motifMatching.5kup.5kdown.pwm80.cor02 <- function()
                 pfms=query(MotifDb, "sapiens", "jaspar2018"),
                 matchThreshold=80,
                 motifDiscovery="matchPWM",
-                tfMapping=c("MotifDb", "TFClass"),
+                tfMapping=c("MotifDb"),
                 tfPrefilterCorrelation=0.2,
                 orderModelByColumn="rfScore",
                 solverNames=c("lasso", "lassopv", "pearson", "randomForest", "ridge", "spearman"))
@@ -265,7 +265,7 @@ regions.motifMatching.2kup.200down.pwm80.cor02 <- function()
                 pfms=query(MotifDb, "sapiens", "jaspar2018"),
                 matchThreshold=80,
                 motifDiscovery="matchPWM",
-                tfMapping=c("MotifDb", "TFClass"),
+                tfMapping=c("MotifDb"),
                 tfPrefilterCorrelation=0.2,
                 orderModelByColumn="rfScore",
                 solverNames=c("lasso", "lassopv", "pearson", "randomForest", "ridge", "spearman"))
@@ -347,7 +347,7 @@ find.lyl1 <- function()
                 db.host="khaleesi.systemsbiology.net",
                 databases=list("brain_hint_20", "brain_hint_16", "brain_wellington_20", "brain_wellington_16"),
                 motifDiscovery="builtinFimo",
-                tfMapping=c("MotifDB", "TFClass"),
+                tfMapping=c("MotifDb"),
                 tfPrefilterCorrelation=0.2,
                 orderModelByColumn="rfScore",
                 solverNames=c("lasso", "lassopv", "pearson", "randomForest", "ridge", "spearman"))
@@ -369,7 +369,7 @@ regions.motifMatching.2kup.200down.pwm90.cor02 <- function()
                 pfms=query(MotifDb, "sapiens", "jaspar2018"),
                 matchThreshold=90,
                 motifDiscovery="matchPWM",
-                tfMapping=c("MotifDb", "TFClass"),
+                tfMapping=c("MotifDb"),
                 tfPrefilterCorrelation=0.2,
                 orderModelByColumn="rfScore",
                 solverNames=c("lasso", "lassopv", "pearson", "randomForest", "ridge", "spearman"))
@@ -391,7 +391,7 @@ regions.motifMatching.2kup.200down.pwm95.cor02 <- function()
                 pfms=query(MotifDb, "sapiens", "jaspar2018"),
                 matchThreshold=95,
                 motifDiscovery="matchPWM",
-                tfMapping=c("MotifDb", "TFClass"),
+                tfMapping=c("MotifDb"),
                 tfPrefilterCorrelation=0.2,
                 orderModelByColumn="rfScore",
                 solverNames=c("lasso", "lassopv", "pearson", "randomForest", "ridge", "spearman"))
@@ -414,7 +414,7 @@ regions.motifMatching.enhancers.5kbup.5kbdown.pwm80.cor04 <- function()
                 pfms=query(MotifDb, "sapiens", "jaspar2018"),
                 matchThreshold=80,
                 motifDiscovery="matchPWM",
-                tfMapping=c("MotifDb", "TFClass"),
+                tfMapping=c("MotifDb"),
                 tfPrefilterCorrelation=0.4,
                 orderModelByColumn="rfScore",
                 solverNames=c("lasso", "lassopv", "pearson", "randomForest", "ridge", "spearman"))
@@ -436,7 +436,7 @@ regions.motifMatching.snpEnhancerOnly <- function()
                 pfms=query(MotifDb, "sapiens", "jaspar2018"),
                 matchThreshold=85,
                 motifDiscovery="matchPWM",
-                tfMapping=c("MotifDb", "TFClass"),
+                tfMapping=c("MotifDb"),
                 tfPrefilterCorrelation=0.4,
                 orderModelByColumn="rfScore",
                 solverNames=c("lasso", "lassopv", "pearson", "randomForest", "ridge", "spearman"))
@@ -459,16 +459,140 @@ noDNA.allTFs.cor04 <- function(mtx)
 
 } # noDNA.allTFs.cor04
 #------------------------------------------------------------------------------------------------------------------------
-calculateDisruptions <- function()
+identifyMotifs <- function()
 {
-    # extract tfs from the models, then set up fimo with their motifs
+
   load("../shinyApp/trem2-models.RData")
-  tfs <- rownames(subset(tbl.summary, observed > 3 & rank.sum < 100))
+  tbl.summary <- all.models$summary$model
+  tfs <- subset(tbl.summary, observed > 1 & rank.sum < 50)$TF
   length(tfs)
 
   pfms.human.jhs <- query(MotifDb, "sapiens", c("jaspar2018", "hocomoco", "swissregulon"))
-  pfms.oi <- query(pfms.human.jhs, "", tfs)
-  export(pfms.oi, "~/github/fimoService/pfms/trem2.pfms.meme", 'meme')
+  #pfms.human.jhs <- query(MotifDb, "sapiens", c("jaspar2018", "hocomoco"))
+  length(pfms.human.jhs)
+  pfms.tfs <- query(pfms.human.jhs, "", tfs)
+  length(pfms.tfs)
+  dimers <-  grep("::", names(pfms.tfs))
+  if(length(dimers) > 0)
+     pfms.tfs <- pfms.tfs[-dimers]
+  length(pfms.tfs)
+
+  tfs.with.motifs <- mcols(pfms.tfs)$geneSymbol
+  setdiff(tfs, tfs.with.motifs)   # "PLEK" "LYL1" "VAV1"
+  tbl.xtab <- as.data.frame(table(tfs.with.motifs))
+  tbl.xtab <- tbl.xtab[order(tbl.xtab$Freq, decreasing=TRUE),]
+
+  indices <- which(tfs.with.motifs == "STAT1")
+  indices  # 34 35 36 37 38 39
+  plotMotifs(pfms.tfs[indices])  # chose the first one, #34
+
+  indices <- which(tfs.with.motifs == "SPI1")
+  indices  # 3 4 5 6 7
+  plotMotifs(pfms.tfs[indices])  # chose the long third one, # 5
+
+  indices <- which(tfs.with.motifs == "BCL6B")
+  indices  # 16 18 20
+  plotMotifs(pfms.tfs[indices])  # chose the long first one, # 16
+
+  indices <- which(tfs.with.motifs == "CEBPA")
+  indices   # 11 22 23
+  plotMotifs(pfms.tfs[indices])  # chose the long first one, # 21
+
+  indices <- which(tfs.with.motifs == "EGR4")
+  indices   #  28 29 30
+  plotMotifs(pfms.tfs[indices])  # chose 28
+
+  indices <- which(tfs.with.motifs == "ELK3")
+  indices   # 40 41 42
+  plotMotifs(pfms.tfs[indices])  # chose the first one, 41
+
+  indices <- which(tfs.with.motifs == "FOXP1")
+  indices   #  31 32 33
+  plotMotifs(pfms.tfs[indices])  # chose 33
+
+  indices <- which(tfs.with.motifs == "IRF5")
+  indices   #  8 9 10
+  plotMotifs(pfms.tfs[indices])  # chose 8, but 9 hocomoco more strict, interesting
+
+  indices <- which(tfs.with.motifs == "IRF8")
+  indices   # 11 12 13
+  plotMotifs(pfms.tfs[indices])  # chose   11
+
+  indices <- which(tfs.with.motifs == "TAL1")
+  indices   #  43 44 45
+  plotMotifs(pfms.tfs[indices])  # chose  44
+
+  indices <- which(tfs.with.motifs == "BCL6")
+  indices   # 17 19
+  plotMotifs(pfms.tfs[indices])  # chose 19
+
+  indices <- which(tfs.with.motifs == "IKZF1")
+  indices   # 1 2
+  plotMotifs(pfms.tfs[indices])  # chose 2
+
+  indices <- which(tfs.with.motifs == "NFATC2")
+  indices   # 26 27
+  plotMotifs(pfms.tfs[indices])  # chose 26
+
+  indices <- which(tfs.with.motifs == "TFEC")
+  indices   #  14 15
+  plotMotifs(pfms.tfs[indices])  # chose 14
+
+  indices <- which(tfs.with.motifs == "ZBTB18")
+  indices   # 24 25
+  plotMotifs(pfms.tfs[indices])  # chose 24
+
+  chosen <- c(34, 5, 16, 21, 28, 41, 33, 8, 11, 44, 19, 2, 26, 14, 24)
+  pfms.chosen <- pfms.tfs[chosen]
+  tfs.with.single.motifs <- mcols(pfms.chosen)$geneSymbol
+  setdiff(tfs, tfs.with.single.motifs)  #  "PLEK" "LYL1" "VAV1"
+
+  export(pfms.chosen, "~/github/fimoService/pfms/trem2.curated.15.pfms.meme", 'meme')
+
+} # identifyMotifs
+#------------------------------------------------------------------------------------------------------------------------
+calculateDisruptions <- function()
+{
+    # extract tfs from the models, then set up fimo with their motifs
+#  load("../shinyApp/trem2-models.RData")
+#  tbl.summary <- all.models$summary$model
+#  tfs <- subset(tbl.summary, observed > 1 & rank.sum < 50)$TF
+#  length(tfs)
+#
+#  pfms.human.jhs <- query(MotifDb, "sapiens", c("jaspar2018", "hocomoco", "swissregulon"))
+#  #pfms.human.jhs <- query(MotifDb, "sapiens", c("jaspar2018", "hocomoco"))
+#  length(pfms.human.jhs)
+#  pfms.tfs <- query(pfms.human.jhs, "", tfs)
+#  length(pfms.tfs)
+#  dimers <-  grep("::", names(pfms.tfs))
+#  if(length(dimers) > 0)
+#     pfms.tfs <- pfms.tfs[-dimers]
+#  length(pfms.tfs)
+#  pfm.names <- rev(sort(names(pfms.tfs)))
+#  names(pfm.names) <- pfm.names
+#  pfm.names <- sub("\\.[1-9]$", "", pfm.names)
+#  dups <- which(duplicated(as.character(pfm.names)))
+#  length(dups)
+#  if(length(dups) > 0)
+#      pfm.names <- pfm.names[-dups]
+#  pfm.names.unique <- names(pfm.names)
+#  pfms.tfs <- MotifDb[names(pfm.names)]
+#  length(pfms.tfs)
+#   # take special steps to get tfclass LYL1 motifs
+#  #pfms.lyl1 <- query(pfms.human.jhs, "", geneToMotif(MotifDb, "LYL1", c("MotifDb", "TFClass"))$motif)
+#  #length(pfms.lyl1)
+#  #dups <- intersect(names(pfms.tfs), names(pfms.lyl1))
+#  #if(length(dups) > 0){
+#  #   deleters <- match(dups, names(pfms.lyl1))
+#  #   pfms.lyl1 <- pfms.lyl1[-deleters]
+#  #   }
+#  #pfms.oi <- c(pfms.tfs, pfms.lyl1)
+#  pfms.oi <- pfms.tfs
+   load("pfms.chosen.RData")
+  pfms.oi <- pfms.chosen
+  length(pfms.oi)
+
+  #export(pfms.oi, "~/github/fimoService/pfms/trem2.pfms.meme", 'meme')
 
      # restart fimo service:
      #   cd ~/github/fimoService/server
@@ -480,29 +604,69 @@ calculateDisruptions <- function()
 
    mm <- MotifMatcher(genome, as.list(pfms.oi), quiet=TRUE)
    tbl.seq <- getSequence(mm, tbl.regionMax)
-   sequence <- tbl.seq$seq
+   sequence <- tbl.seq$seq  # 318k
    stopifnot(nchar(sequence) == (1 + tbl.regionMax$end - tbl.regionMax$start))
-   tbl.fimo <- requestMatch(fimo, list(big=sequence))
+   tbl.fimo.raw <- requestMatch(fimo, list(big=sequence))
+   save(tbl.fimo.raw, file="tbl.fimo.raw.RData")
+   tbl.fimo <- tbl.fimo.raw
    tbl.fimo$start <- tbl.fimo$start + tbl.regionMax$start
    tbl.fimo$stop <-  tbl.fimo$stop + tbl.regionMax$start
-
+   dim(tbl.fimo)
+   tbl.fimo <- subset(tbl.fimo, p.value <= 0.001)
+   dim(tbl.fimo)
+   tbl.fimo$chrom <- "chr6"
+      # add the tf column
+   motif.names <- names(pfms.chosen)
+   motif2tf.map <- mcols(pfms.chosen)$geneSymbol
+   names(motif2tf.map) <- motif.names
+   tfs <- as.character(motif2tf.map[tbl.fimo$motif])
+   checkEquals(length(tfs), nrow(tbl.fimo))
+   tbl.fimo$tf <- tfs
+   dim(tbl.fimo)
+   tbl.fimo <- tbl.fimo[, c("chrom", "start", "stop", "strand", "motif", "tf", "score", "p.value", "q.value", "matched.sequence")]
+   colnames(tbl.fimo) <- c("chrom", "motifStart", "motifEnd", "strand", "motifName", "tf", "motifScore", "motif.pVal", "motif.qVal", "sequence")
+   tbl.fimo <- tbl.fimo[order(tbl.fimo$motifStart, decreasing=FALSE),]
+   #motif.names <- unique(tbl.fimo$motifName)
+   #length(motif.names)
+   #tbl.fimo <- associateTranscriptionFactors(MotifDb, tbl.fimo, source="MotifDb", expand.rows=TRUE)
+   #tbl.fimo <- tbl.fimo[, c(2:5, 1, 6:13)]
+   #dim(tbl.fimo)
       # find the union of gwas (tbl.snp) and eqtl(tbl.eqtl) snps
-   tbl.snpsAll <- merge(tbl.snp, tbl.eqtl, by=c("rsid", "chrom", "start", "end"), all=TRUE)
+   tbl.eqtl.slim <- tbl.eqtl[, c("chrom", "start", "end", "rsid", "ref", "mut", "snpPval")]
+   #tbl.eqtl.slim$source <- "eqtl"
+   colnames(tbl.eqtl.slim)[7] <- "eqtlPval"
+   rownames(tbl.eqtl.slim) <- NULL
+   tbl.snp.slim  <-  tbl.snp[, c("chrom", "start", "end", "rsid", "wt", "mut", "snpPval")]
+   colnames(tbl.snp.slim)[5] <- "ref"
+   colnames(tbl.snp.slim)[7] <- "gwasPval"
+   rownames(tbl.snp.slim) <- NULL
+   #tbl.snp.slim$source <- "gwas"
+
+   tbl.snpsAll <- merge(tbl.snp.slim, tbl.eqtl.slim, by=c("rsid", "chrom", "start", "end"), all=TRUE)
+
    tbl.snpsAll <- tbl.snpsAll[, c(2,3,4,1,5:ncol(tbl.snpsAll))]
-   colnames(tbl.snpsAll)[1:3] <- c("chrom", "start", "end")
+   colnames(tbl.snpsAll)[c(5,6,8,9)] <- c("ref.gwas", "mut.gwas", "ref.eqtl", "ref.eqtl")
+   coi <- c("chrom", "start", "end", "rsid", "ref.gwas", "mut.gwas", "gwasPval", "ref.eqtl", "ref.eqtl", "eqtlPval")
+   tbl.snpsAll <- tbl.snpsAll[, coi]
+   track <- DataFrameAnnotationTrack("snps", tbl.snpsAll[, c("chrom", "start", "end", "rsid")], color="red")
+   displayTrack(igv, track)
    gr.snpsAll <- GRanges(tbl.snpsAll[, 1:3])
-   tbl.fimoFixedUp <- data.frame(chrom=rep("chr6", nrow(tbl.fimo)), start=tbl.fimo$start, end=tbl.fimo$stop)
-   gr.fimo <- GRanges(tbl.fimoFixedUp)
+   tbl.fimo.locsOnly <- tbl.fimo[, 1:3]
+   #colnames(tbl.fimo.locsOnly) <- c("chrom", "start", "end")
+   gr.fimo <- GRanges(tbl.fimo.locsOnly)
    tbl.ov <- as.data.frame(findOverlaps(gr.snpsAll, gr.fimo))
    nrow(tbl.ov)
    colnames(tbl.ov) <- c("snp", "fimo")
 
    tbl.bs <- cbind(tbl.fimo[tbl.ov$fimo,], tbl.snpsAll[tbl.ov$snp,])
-   tbl.bs <- subset(tbl.bs, p.value <= 0.01)
-   dim(tbl.bs)
-   track <- DataFrameAnnotationTrack("ov", tbl.bs[, c("chrom", "start", "stop", "motif")], color="green")
-   displayTrack(igv, track)
-   save(tbl.bs, file="../shinyApp/perturbedBindingSites.RData")
+     # remove duplicate chrom column, collapse start end down to snpLoc
+   tbl.bs <- tbl.bs[, -c(11,13)]   # get rid of extra chrom.1 column, and snp end
+   colnames(tbl.bs)[11] <- "snpLoc"
+   colnames(tbl.bs)[c(2,3)] <- c("start", "end")
+   dim(tbl.bs)   # 18, 18
+     # track <- DataFrameAnnotationTrack("ov", tbl.bs[, c("chrom", "start", "stop", "motif")], color="green")
+     # displayTrack(igv, track)
+   save(tbl.bs, file="tbl.bs.inProcess.RData")
 
    sequence.mut <- vector(mode="character", length=nrow(tbl.bs))
      # not sure where it creeps in, but our chrom locs are +1 compared to hg38 reference
@@ -512,10 +676,9 @@ calculateDisruptions <- function()
      # now add the actual, full mutant sequence for each region
 
    rc <- function(seq) as.character(reverseComplement(DNAString(seq)))
-   tbl.regions <- tbl.bs[, c("chrom", "start", "stop")]
+   tbl.regions <- tbl.bs[, c("chrom", "start", "end")]
    tbl.regions$start <- tbl.regions$start - 1
-   tbl.regions$stop <- tbl.regions$stop - 1
-   colnames(tbl.regions)[3] <- "end"
+   tbl.regions$end <- tbl.regions$end - 1
 
    for(i in seq_len(nrow(tbl.bs))){
       strand <- tbl.bs$strand[i]
@@ -526,7 +689,7 @@ calculateDisruptions <- function()
         seq.mut <- rc(seq.mut)
         }
       stopifnot(seq.wt == tbl.bs$matched.sequence[i])
-      printf("%2d.  wt: %s   strand: %s   rsid: %s", i, tbl.bs$matched.sequence[i], tbl.bs$strand[i], tbl.bs$rsid[i])
+      printf("%2d.  wt: %s   strand: %s   rsid: %s", i, tbl.bs$sequence[i], tbl.bs$strand[i], tbl.bs$rsid[i])
       printf("    mut: %s", seq.mut)
       #browser()
       sequence.mut[i] <- seq.mut
@@ -547,13 +710,13 @@ addFimoScores <- function()
    for(i in seq_len(nrow(tbl.bs))){
       if(tbl.bs$sequence.mut[i] == "N")
          next
-      seqs <- list(wt=tbl.bs$sequence.wt[i],  mut=tbl.bs$sequence.mut[i])
+      seqs <- list(wt=tbl.bs$sequence[i],  mut=tbl.bs$sequence.mut[i])
       tbl.match <- requestMatch(fimo, seqs)
-      tbl.moi <- subset(tbl.match, motif==tbl.bs$motif[i])  # motif of interest
+      tbl.moi <- subset(tbl.match, motif==tbl.bs$motifName[i])  # motif of interest
       scores <- -log10(tbl.moi$p.value)
       delta <- scores[1] - scores[2]
       deltas[i] <- delta
-      print(tbl.bs[i, c("tf", "chrom", "start")])
+      print(tbl.bs[i, c("chrom", "start")])
       printf("   delta: %5.2f", delta)
       } # for i
 
@@ -576,7 +739,7 @@ run <- function()
                       db.host="khaleesi.systemsbiology.net",
                       databases=c("brain_hint_20"),  #"brain_hint_16", "brain_wellington_20", "brain_wellington_16"),
                       motifDiscovery="builtinFimo",
-                      tfMapping=c("TFClass", "MotifDb"),
+                      tfMapping=c("MotifDb"),
                       tfPrefilterCorrelation=0.4,
                       orderModelByColumn="rfScore",
                       solverNames=c("lasso", "lassopv", "pearson", "randomForest", "ridge", "spearman"))
@@ -590,8 +753,6 @@ run <- function()
 
    model.lyl1 <-  calculate(sgm, list(lyl1.10k=build.spec))
 
-
-
    models.01.cer <- calculate(sgm, list(fp.2000up.200down.cor02=fp.2000up.200down.cor02(mtx.cer)))
    models.01.tcx <- calculate(sgm, list(fp.2000up.200down.cor02=fp.2000up.200down.cor02(mtx.tcx)))
 
@@ -601,8 +762,8 @@ run <- function()
    models.03.cer <- calculate(sgm, list(fp.enhancers.cor02=fp.enhancers.cor02(tbl.enhancers.trem2, mtx.cer)))
    models.03.tcx <- calculate(sgm, list(fp.enhancers.cor02=fp.enhancers.cor02(tbl.enhancers.trem2, mtx.tcx)))
 
-   models.04.cer <- calculate(sgm, list(fp.enhancers.cor02=fp.enhancers.cor02(tbl.enhancers.trem2, mtx.cer)))
-   models.04.tcx <- calculate(sgm, list(fp.enhancers.cor02=fp.enhancers.cor02(tbl.enhancers.trem2, mtx.tcx)))
+   #models.04.cer <- calculate(sgm, list(fp.enhancers.cor02=fp.enhancers.cor02(tbl.enhancers.trem2, mtx.cer)))
+   #models.04.tcx <- calculate(sgm, list(fp.enhancers.cor02=fp.enhancers.cor02(tbl.enhancers.trem2, mtx.tcx)))
 
    models.05.cer <- calculate(sgm, list(noDNA.allTFs.cor04=noDNA.allTFs.cor04(mtx.cer)))
    models.05.tcx <- calculate(sgm, list(noDNA.allTFs.cor04=noDNA.allTFs.cor04(mtx.tcx)))
@@ -612,8 +773,8 @@ run <- function()
                       fp.2000up.200down.tcx=models.01.tcx[[1]],
                       fp.5kup.5kdown.cer=models.03.cer[[1]],
                       fp.5kup.5kdown.tcx=models.03.tcx[[1]],
-                      fp.enhancers.cer=models.04.cer[[1]],
-                      fp.enhancers.txc=models.04.tcx[[1]],
+                      #fp.enhancers.cer=models.04.cer[[1]],
+                      #fp.enhancers.txc=models.04.tcx[[1]],
                       allTFs.cer=models.05.cer[[1]],
                       allTFs.tcx=models.05.tcx[[1]]
                       )

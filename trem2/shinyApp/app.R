@@ -6,12 +6,8 @@ library(GenomicRanges)
 library(later)
 library(MotifDb)
 library(motifStack)
+library(RUnit)
 #----------------------------------------------------------------------------------------------------
-
-  # "tbl.model.enhancerAll.mdb"  "tbl.model.enhancerAll.tfc"
-  # "tbl.motifs.enhancerAll.mdb" "tbl.motifs.enhancerAll.tfc"
-  # "tbl.enhancer"
-
 load("trem2-models.RData")
 models <- all.models
 load("dhs.RData") # tbl.dhs
@@ -21,13 +17,11 @@ model.names <- names(all.models)
 modelList <- list()
 for(model.name in model.names){
    modelList <- c(modelList, eval(parse(text=sprintf('c("%s"="%s")', model.name, model.name))))
-  }
-
-#if(exists("tbl.summary")){
-#   modelList$summary <- "summary"
-#   all.models[["summary"]] <- list(model=tbl.summary)
-#   }
-
+   }
+#----------------------------------------------------------------------------------------------------
+load("enhancers.RData")
+load("snps.RData")
+load("tbl.bindingSitesWithSnpsAndDeltaScores.RData")
 #----------------------------------------------------------------------------------------------------
 currentFilters <- list()
 currentShoulder <- 0
@@ -68,18 +62,22 @@ ui <- fluidPage(
                      "Carrasquillo 2016 eqtl snps"="eqtl.snps"
                      )),
 
-       sliderInput("IGAP.snp.significance", "-log10(GWAS SNP qval)",
-                    value = 2,
+       sliderInput("IGAP.snp.significance", "-log10 (SNP pval)",
+                    value = fivenum(-log10(tbl.bs$gwasPval))[3],
+                    step=0.1,
                     min = 0,
                     max = 12),
-       sliderInput("fimo.motif.significance", "-log10(FIMO motif pval)",
-                    value = 5,
+       sliderInput("fimo.motif.significance", "-log10 (FIMO motif pval)",
+                    value = fivenum(-log10(tbl.bs$motif.pVal))[3],
+                    step=0.1,
+                    min = 0,
+                    max = 12,
+                    round=-2),
+       sliderInput("fimo.snp.effect", "-log10 (FIMO SNP effect) - delta qval",
+                    value = 0.75,
+                    step=0.1,
                     min = 0,
                     max = 12),
-       sliderInput("fimo.snp.effect", "-log10(FIMO SNP effect) - delta qval",
-                    value = 2,
-                    min = 0,
-                   max = 12),
         actionButton("findDisruptiveSNPsButton", "Find SNPs which disrupt TF binding sites")
         ),
 
@@ -87,8 +85,12 @@ ui <- fluidPage(
        tabsetPanel(type="tabs",
                    id="trenaTabs",
                    tabPanel(title="IGV",     value="igvTab",          igvShinyOutput('igvShiny')),
-                   tabPanel(title="Summary", value="summaryTab",      verbatimTextOutput("summary")),
+                   tabPanel(title="READ ME",         includeHTML("readme.html")),
                    tabPanel(title="TRN",     value="geneModelTab",     DTOutput("geneModelTable")),
+                   tabPanel(title="SNP",             value="snpInfoTab",   mainPanel(
+                                                                              verbatimTextOutput("tfbsText"),
+                                                                              DTOutput("snpMotifTable"),
+                                                                              imageOutput("logoImage"))),
                    tabPanel(title="tf/target plot",  value="plotTab", plotOutput("xyPlot", height=800))
                    )
        ) # mainPanel
@@ -105,6 +107,34 @@ server <- function(input, output, session) {
     # redefined with a change to dist or n
     # has reactive children  plot, summary, table, below, which mention it
     # thereby establishing the reactive chain.
+
+   observeEvent(input$trackClick, {
+      printf("browser snp click observed!")
+      print(input$trackClick)
+      motifName <- input$trackClick$id
+      if(grepl("^tfbs-snp", motifName)){
+         load("tbl.bindingSitesWithSnpsAndDeltaScores.RData")
+         tokens <- strsplit(motifName, ":")[[1]]
+         pfm.name <- tokens[2]
+         snp.name <- tokens[3]
+         tbl.sub <- subset(tbl.bs, motifName==pfm.name & rsid==snp.name)
+         tbl.sub <- tbl.sub[, c("chrom", "start", "end", "strand", "sequence", "sequence.mut", "wtMutMatchDelta")]
+         colnames(tbl.sub)[7] <- "10^x match loss"
+         output$tfbsText <- renderText({sprintf("%s   %s", pfm.name, snp.name)})
+         image.filename <- sprintf("png/%s.png", pfm.name)
+         output$snpMotifTable <- renderDT(tbl.sub, options = list(scrollX = TRUE))
+         output$logoImage <- renderImage({
+                 list(src=image.filename,
+                      contentType="image/png",
+                      width=500,
+                      height=500,
+                      alt="alt text")},
+                 deleteFile=FALSE)
+         #updateTabsetPanel(session, "trenaTabs", select="snpInfoTab");
+         } # if tfbs-snp
+      })
+
+
 
    observeEvent(input$geneModel, {
       printf("geneModel event: %s", input$geneModel);
@@ -141,6 +171,14 @@ server <- function(input, output, session) {
       displayTrack(session, newTrackName)
       })
 
+   observeEvent(input$findDisruptiveSNPsButton, {
+      snpSignificanceThreshold <- isolate(session$input$IGAP.snp.significance)
+      motifMatchThreshold <- isolate(session$input$fimo.motif.significance)
+      bindingLossThreshold <- snpEffect.pval.threshold <- isolate(session$input$fimo.snp.effect)
+      tbl.disruptions <- findDisruptiveSNPs(snpSignificanceThreshold, motifMatchThreshold, bindingLossThreshold)
+      if(nrow(tbl.disruptions) > 0)
+         displayDisruptiveSnps(session, tbl.disruptions)
+      })
 
    observeEvent(input$findSnpsInModelButton, {
       trena.model <- isolate(input$model.trn)
@@ -217,18 +255,9 @@ server <- function(input, output, session) {
         print(summary(model.female))
         })
 
-  output$summary <- renderPrint({
-    print(input$targetGene)
-    print(input$roi)
-    print(input$filters)
-    print(input$pwmMatchThreshold)
-    print(input$model.trn)
-    })
-
    output$geneModelTable <- renderDT(
       {model.name <- input$geneModel;
        printf("    rendering DT, presumably because input$geneModel changes, model.name: %s", model.name);
-       browser()
        selection="single"
        tbl.model <- all.models[[model.name]]$model
        printf("data.frame dimensions: %d, %d", nrow(tbl.model), ncol(tbl.model))
@@ -267,6 +296,7 @@ displayTrack <- function(session, trackName)
    if(!trackName %in% supportedTracks)
       return()
 
+
    x <- switch(trackName,
       trem2.enhancers  = {list(bed=tbl.enhancers.trem2,  name="TREM2 enhancers",   color="black")},
       treml1.enhancers = {list(bed=tbl.enhancers.treml1, name="TREML1 enahancers", color="black")},
@@ -277,14 +307,65 @@ displayTrack <- function(session, trackName)
 
     temp.filename <- tempfile(tmpdir="tmp", fileext=".bed")
     write.table(x$bed, sep="\t", row.names=FALSE, col.names=FALSE, quote=FALSE, file=temp.filename)
-    session$sendCustomMessage(type="displayBedTrack",
-                              message=(list(filename=temp.filename,
-                                            trackName=x$name,
-                                            displayMode="EXPANDED",
-                                            color=x$color,
-                                            trackHeight=40)))
+    updateTabsetPanel(session, "trenaTabs", select="igvTab");
+    later(function(){
+       session$sendCustomMessage(type="displayBedTrack",
+                                 message=(list(filename=temp.filename,
+                                               trackName=x$name,
+                                               displayMode="EXPANDED",
+                                               color=x$color,
+                                               trackHeight=40)))
+       }, 1)
 
 } # displayTrack
+#------------------------------------------------------------------------------------------------------------------------
+findDisruptiveSNPs <- function(snpSignificanceThreshold, motifMatchThreshold, bindingLossThreshold)
+{
+   printf("--- findDisruptiveSNPs")
+   printf("  snpSignificanceThreshold: %5.1f", snpSignificanceThreshold)
+   printf("  motifMatchThreshold: %5.1f",      motifMatchThreshold)
+   printf("  bindingLossThreshold: %5.1f",     bindingLossThreshold);
+   #browser()
+   tbl.tmp <- subset(tbl.bs,  -log10(gwasPval) >= snpSignificanceThreshold |
+                              -log10(eqtlPval) >= snpSignificanceThreshold)
+   tbl.out <- subset(tbl.tmp,
+                     -log10(motif.pVal )   >= motifMatchThreshold &
+                     wtMutMatchDelta       >= bindingLossThreshold)
+   printf("snps meet criteria: %d", nrow(tbl.out))
+   tbl.out
+
+} # findDisruptiveSNPs
+#------------------------------------------------------------------------------------------------------------------------
+test_findDisruptiveSNPs <- function()
+{
+   printf("--- test_findDisruptiveSNPs")
+   checkTrue(exists("tbl.bs"))
+   tbl.dsnps <- findDisruptiveSNPs(snpSignificanceThreshold=0, motifMatchThreshold=3, bindingLossThreshold=1)
+   dim(tbl.dsnps)
+   coi <- c("motif", "chrom", "start", "stop", "p.value", "rsid", "start.1", "wt", "mut.x", "snpPval.x", "wtMutMatchDelta")
+   tbl.dsnps[, coi]
+
+} # test_findDisruptiveSNPs
+#------------------------------------------------------------------------------------------------------------------------
+displayDisruptiveSnps <- function(session, tbl.disruptions)
+{
+   coi <- c("chrom", "start", "end", "motifName", "tf", "motifScore", "rsid")
+   tbl.condensed <- tbl.disruptions[, coi]
+   tfs <- unique(tbl.condensed$tf)
+   for(geneSymbol in tfs){
+      tbl.tmp <- subset(tbl.condensed, tf==geneSymbol)
+      tbl.tmp$motifName <- sprintf("tfbs-snp:%s:%s", tbl.tmp$motifName, tbl.tmp$rsid)
+      temp.filename <- tempfile(tmpdir="./tmp", fileext=".bed")
+      write.table(tbl.tmp, sep="\t", row.names=FALSE, col.names=FALSE, quote=FALSE, file=temp.filename)
+      session$sendCustomMessage(type="displayBedTrack",
+                             message=(list(filename=temp.filename,
+                                           trackName=sprintf("%s w/snp", geneSymbol),
+                                           displayMode="EXPANDED",
+                                           color="red",
+                                           trackHeight=40)))
+      } # for geneSymbol
+
+} # displayDisruptiveSnps
 #------------------------------------------------------------------------------------------------------------------------
 calculateVisibleSNPs <- function(targetGene, roi, filters, snpShoulder)
 {
@@ -301,6 +382,23 @@ calculateVisibleSNPs <- function(targetGene, roi, filters, snpShoulder)
 
 } # calculateVisibleSNPs
 #----------------------------------------------------------------------------------------------------
+createMotifLogo.pngs <- function(pfms)
+{
+   #load("tbl.bindingSitesWithSnpsAndDeltaScores.RData")
+   #tfs <- unique(tbl.bs$tf)
+   # pfms.1 <- query(MotifDb, "sapiens", c("hocomoco", "jaspar2018", "swissregulon"))
+   #pfms.tf <- query(pfms.1, "", tfs)
+   #length(pfms.tf)
+   for(pfm.name in names(pfms.oi)){
+      filename <- file.path("../shinyApp", "png", sprintf("%s.png", pfm.name))
+      printf("filename: %s", filename)
+      png(filename)
+      plotMotifs(pfms.oi[pfm.name])
+      dev.off()
+      } # for i
+
+} # createMotifLogo.pngs
+#------------------------------------------------------------------------------------------------------------------------
 removeTrack <- function(session, trackName)
 {
   session$sendCustomMessage(type="removeTrack", message=list(trackName=trackName))
@@ -310,6 +408,7 @@ removeTrack <- function(session, trackName)
 displayBindingSites <- function(session, input, tf)
 {
    tbl.bindingSites <- all.models[[state$currentModelName]]$regulatoryRegions
+   printf(" looking for binding sites in %s", state$currentModelName)
    if(!tf %in% tbl.bindingSites$geneSymbol){
       printf("tf %s not in regulatory regions for model '%s'", tf, state$currentModelName)
       return()
@@ -339,5 +438,5 @@ displayBindingSites <- function(session, input, tf)
 
 } # displayBindingSites
 #------------------------------------------------------------------------------------------------------------------------
-Sys.sleep(3)
-shinyApp(ui, server)
+#Sys.sleep(3)
+#shinyApp(ui, server)
