@@ -22,7 +22,9 @@ for(model.name in model.names){
 load("enhancers.RData")
 load("snps.RData")
 load("tbl.bindingSitesWithSnpsAndDeltaScores.RData")
+load("tbl.fimoHitsInEnhancers.RData")
 #----------------------------------------------------------------------------------------------------
+tss <- 41163186
 currentFilters <- list()
 currentShoulder <- 0
 currentPwmMatchThreshold <- 90
@@ -32,7 +34,7 @@ state <- new.env(parent=emptyenv())
 state[["currentModel"]] <- models[[1]]
 state[["currentModelName"]] <- names(models)[1]
 state[["optionalTracks"]] <- c()
-
+state[["currentGenomicRegion"]] <- ""
 #----------------------------------------------------------------------------------------------------
 ui <- fluidPage(
 
@@ -47,9 +49,10 @@ ui <- fluidPage(
      sidebarPanel(
         width=3,
         selectInput("displayGenomicRegion", "Display Genomic Region:",
-                    c("TREM2 2200 bp promoter"="promoter2200",
+                    c("TREM2 +/- 40kb" = "tssPlusMinus40kb",
+                      "TREM2 2200 bp promoter"="promoter2200",
                       "TREM2 10kb promoter"="promoter10kb",
-                      "TREM gene family overview"="overview")),
+                      "TREM gene family"="overview")),
 
         selectInput("geneModel", "Choose model:", modelList),
 
@@ -63,18 +66,18 @@ ui <- fluidPage(
                      )),
 
        sliderInput("IGAP.snp.significance", "-log10 (SNP pval)",
-                    value = fivenum(-log10(tbl.bs$gwasPval))[3],
+                    value = 2, #fivenum(-log10(tbl.bs$gwasPval))[3],
                     step=0.1,
                     min = 0,
                     max = 12),
        sliderInput("fimo.motif.significance", "-log10 (FIMO motif pval)",
-                    value = fivenum(-log10(tbl.bs$motif.pVal))[3],
+                    value = 2, #fivenum(-log10(tbl.bs$motif.pVal))[3],
                     step=0.1,
                     min = 0,
                     max = 12,
                     round=-2),
        sliderInput("fimo.snp.effect", "-log10 (FIMO SNP effect) - delta qval",
-                    value = 0.75,
+                    value = 0.5,
                     step=0.1,
                     min = 0,
                     max = 12),
@@ -84,14 +87,15 @@ ui <- fluidPage(
      mainPanel(
        tabsetPanel(type="tabs",
                    id="trenaTabs",
-                   tabPanel(title="IGV",     value="igvTab",          igvShinyOutput('igvShiny')),
+                   tabPanel(title="IGV",             value="igvTab",          igvShinyOutput('igvShiny')),
                    tabPanel(title="READ ME",         includeHTML("readme.html")),
-                   tabPanel(title="TRN",     value="geneModelTab",     DTOutput("geneModelTable")),
-                   tabPanel(title="SNP",             value="snpInfoTab",   mainPanel(
-                                                                              verbatimTextOutput("tfbsText"),
-                                                                              DTOutput("snpMotifTable"),
-                                                                              imageOutput("logoImage"))),
-                   tabPanel(title="tf/target plot",  value="plotTab", plotOutput("xyPlot", height=800))
+                   tabPanel(title="trena model",     value="geneModelTab",    DTOutput("geneModelTable")),
+                   tabPanel(title="SNP",             value="snpInfoTab",      mainPanel(
+                                                                                 verbatimTextOutput("tfbsText"),
+                                                                                 DTOutput("snpMotifTable"),
+                                                                                 imageOutput("logoImage"))
+                                                                                 ),
+                   tabPanel(title="TF/TREM2 xy plot",  value="plotTab", plotOutput("xyPlot", height=800))
                    )
        ) # mainPanel
     ) # sidebarLayout
@@ -102,6 +106,10 @@ server <- function(input, output, session) {
 
    session$sendCustomMessage(type="showGenomicRegion", message=(list(region="FLT1")))
    dt.proxy <- dataTableProxy("geneModelTable")
+   #later(function() {
+   #   printf("about to select gene family");
+   #   updateSelectInput(session, "displayGenomicRegion", selected="overview")
+   #   }, 3)
 
     # define a reactive conductor. it returns a function, is
     # redefined with a change to dist or n
@@ -122,6 +130,7 @@ server <- function(input, output, session) {
          colnames(tbl.sub)[7] <- "10^x match loss"
          output$tfbsText <- renderText({sprintf("%s   %s", pfm.name, snp.name)})
          image.filename <- sprintf("png/%s.png", pfm.name)
+         later(function(){
          output$snpMotifTable <- renderDT(tbl.sub, options = list(scrollX = TRUE))
          output$logoImage <- renderImage({
                  list(src=image.filename,
@@ -130,10 +139,10 @@ server <- function(input, output, session) {
                       height=500,
                       alt="alt text")},
                  deleteFile=FALSE)
-         #updateTabsetPanel(session, "trenaTabs", select="snpInfoTab");
+         }, 0.5)
+         updateTabsetPanel(session, "trenaTabs", select="snpInfoTab");
          } # if tfbs-snp
       })
-
 
 
    observeEvent(input$geneModel, {
@@ -147,11 +156,13 @@ server <- function(input, output, session) {
      })
 
    observeEvent(input$displayGenomicRegion, {
-      printf("display event: %s", input$displayGenomicRegion)
-      tss <- 41163186
+      regionName <- input$displayGenomicRegion
+      printf("display event: %s", regionName)
+      state$currentGenomicRegion <- regionName
       regions <- list(overview="chr6:41,049,342-41,367,926",
                       promoter2200=sprintf("chr6:%d-%d", tss-200, tss+1999),
-                      promoter10kb=sprintf("chr6:%d-%d", tss-5000, tss+4999)
+                      promoter10kb=sprintf("chr6:%d-%d", tss-5000, tss+4999),
+                      tssPlusMinus40kb="chr6:41,122,760-41,200,161"
                       )
       new.region.name <- input$displayGenomicRegion
       if(!new.region.name %in% names(regions))
@@ -161,7 +172,7 @@ server <- function(input, output, session) {
       myFunc <- function(){
          session$sendCustomMessage(type="showGenomicRegion", message=(list(region=roi)))
          } # myFunc
-      later(myFunc, 0.5)
+      later(myFunc, 5)
       later(function() {updateSelectInput(session, "displayGenomicRegion", selected=character(0))}, 1)
       })
 
@@ -232,8 +243,9 @@ server <- function(input, output, session) {
        {print(" ---- renderPlot");
         selectedTableRow <- input$geneModelTable_row_last_clicked
         tbl.model <- state$currentModel
+        browser()
         tf <- tbl.model$gene[selectedTableRow]
-        printf("want an xyplot of %s vs. FLT1", tf)
+        printf("want an xyplot of %s vs. TREM2", tf)
         tbl.model <- state$currentModel
         tf <- tbl.model$gene[selectedTableRow]
         target <- "FLT1";
@@ -405,24 +417,28 @@ removeTrack <- function(session, trackName)
 
 } # removeTrack
 #----------------------------------------------------------------------------------------------------
-displayBindingSites <- function(session, input, tf)
+displayBindingSites <- function(session, input, target.tf)
 {
-   tbl.bindingSites <- all.models[[state$currentModelName]]$regulatoryRegions
-   printf(" looking for binding sites in %s", state$currentModelName)
-   if(!tf %in% tbl.bindingSites$geneSymbol){
-      printf("tf %s not in regulatory regions for model '%s'", tf, state$currentModelName)
+   #tbl.bindingSites <- all.models[[state$currentModelName]]$regulatoryRegions
+   browser()
+   #printf(" looking for binding sites in %s", state$currentModelName)
+   if(!target.tf %in% tbl.fimoHitsInEnhancers$tf){
+      printf("tf %s not found in tbl.fimoHitsInEnhancers", target.tf, state$currentModelName)
       return()
       }
       # two kinds of bindingSite tables: one from footprint database (has "fp_start"), one from
       # MotifMatcher (has "motifStart").  branch appropriately
-   if("fp_start" %in% colnames(tbl.bindingSites))
-      tbl.tfbs <- subset(tbl.bindingSites, geneSymbol==tf)[, c("chrom", "fp_start", "fp_end", "shortMotif")]
-   if("motifStart" %in% colnames(tbl.bindingSites))
-      tbl.tfbs <- subset(tbl.bindingSites, geneSymbol==tf)[, c("chrom", "motifStart", "motifEnd", "shortMotif")]
+   #if("fp_start" %in% colnames(tbl.bindingSites))
+   #   tbl.tfbs <- subset(tbl.bindingSites, geneSymbol==tf)[, c("chrom", "fp_start", "fp_end", "shortMotif")]
+   #if("motifStart" %in% colnames(tbl.bindingSites))
+      #tbl.tfbs <- subset(tbl.bindingSites, geneSymbol==tf)[, c("chrom", "motifStart", "motifEnd", "shortMotif")]
      #threshold <- isolate(input$pwmMatchThreshold) / 100
      # printf("---  using slider threshold %f", threshold);
      #tbl.tfbs <- subset(tbl.bindingSites, motifRelativeScore >= threshold)[, c("chrom", "motifStart", "motifEnd", "motifRelativeScore")]
      # tbl.tfbs <- tbl.tfbs[order(tbl.tfbs$motifStart, decreasing=FALSE),]
+   tbl.tfbs <- subset(tbl.fimoHitsInEnhancers, tf==target.tf & p.value < 1e-4)
+   tbl.tfbs$chrom <- "chr6"
+   tbl.tfbs <- tbl.tfbs[, c("chrom", "start", "end", "motif", "p.value")]
    printf("      found %d sites", nrow(tbl.tfbs))
    #printf("scores on binding sites: ")
    #print(fivenum(tbl.tfbs$motifRelativeScore))
@@ -430,7 +446,7 @@ displayBindingSites <- function(session, input, tf)
    write.table(tbl.tfbs, sep="\t", row.names=FALSE, col.names=FALSE, quote=FALSE, file=temp.filename)
    session$sendCustomMessage(type="displayBedTrack",
                                 message=(list(filename=temp.filename,
-                                              trackName=tf,
+                                              trackName=target.tf,
                                               color="darkRed",
                                               trackHeight=40)))
 

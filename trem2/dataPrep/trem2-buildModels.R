@@ -619,6 +619,7 @@ calculateDisruptions <- function()
    motif.names <- names(pfms.chosen)
    motif2tf.map <- mcols(pfms.chosen)$geneSymbol
    names(motif2tf.map) <- motif.names
+   save(motif2tf.map, file="motif2tf.map.RData")
    tfs <- as.character(motif2tf.map[tbl.fimo$motif])
    checkEquals(length(tfs), nrow(tbl.fimo))
    tbl.fimo$tf <- tfs
@@ -726,6 +727,36 @@ addFimoScores <- function()
    xyz <- "end of addFimoScores"
 
 } # addFimoScores
+
+#------------------------------------------------------------------------------------------------------------------------
+findFimoMatchesInEnhancers <- function()
+{
+   load("motif2tf.map.RData")
+   mm <- MotifMatcher(genome, as.list(pfms.oi), quiet=TRUE)
+   tbl.fimo <- data.frame()
+
+   for(r in 1:nrow(tbl.enhancers.trem2)){
+     tbl.seq <- getSequence(mm, tbl.enhancers.trem2[r,])
+     sequence <- tbl.seq$seq  # 318k
+     tbl.fimo.raw <- requestMatch(fimo, list(big=sequence))
+     tf <- as.character(motif2tf.map[tbl.fimo.raw$motif])
+     tbl.fimo.raw$tf <- tf
+     tbl.fimo.raw$start <- tbl.fimo.raw$start + tbl.enhancers.trem2[r, "start"]
+     tbl.fimo.raw$stop <- tbl.fimo.raw$stop + tbl.enhancers.trem2[r, "start"]
+     tbl.fimo <- rbind(tbl.fimo, tbl.fimo.raw)
+     } # for r
+
+   coi <- c("motif", "start", "stop", "strand", "score", "p.value",  "q.value", "matched.sequence", "tf")
+   tbl.fimo <- tbl.fimo[, coi]
+   colnames(tbl.fimo)[3] <- "end"
+   dim(tbl.fimo)                             # 53832 9
+   dim(subset(tbl.fimo, p.value <= 1e-2))    #  7259
+   dim(subset(tbl.fimo, p.value <= 1e-3))    #  970
+   dim(subset(tbl.fimo, p.value <= 1e-4))    #  117
+   tbl.fimoHitsInEnhancers <- tbl.fimo
+   save(tbl.fimoHitsInEnhancers, file="../shinyApp/tbl.fimoHitsInEnhancers.RData")
+
+} # findFimoMatchesInEnhancers
 #------------------------------------------------------------------------------------------------------------------------
 run <- function()
 {
