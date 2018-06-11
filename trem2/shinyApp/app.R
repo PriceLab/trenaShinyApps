@@ -8,6 +8,7 @@ library(MotifDb)
 library(motifStack)
 library(RUnit)
 #----------------------------------------------------------------------------------------------------
+targetGene <- "TREM2"
 load("trem2-models.RData")
 models <- all.models
 load("dhs.RData") # tbl.dhs
@@ -18,6 +19,9 @@ modelList <- list()
 for(model.name in model.names){
    modelList <- c(modelList, eval(parse(text=sprintf('c("%s"="%s")', model.name, model.name))))
    }
+
+load("../dataPrep/mtx.withDimers.cer.ros.tcx.RData")
+
 #----------------------------------------------------------------------------------------------------
 load("enhancers.RData")
 load("snps.RData")
@@ -43,7 +47,7 @@ ui <- fluidPage(
                      href = "http://maxcdn.bootstrapcdn.com/font-awesome/4.2.0/css/font-awesome.min.css")
      ),
 
-  titlePanel("TREM2 Trena Models"),
+  titlePanel(sprintf("%s Trena Models", targetGene)),
 
   sidebarLayout(
      sidebarPanel(
@@ -89,15 +93,21 @@ ui <- fluidPage(
                    id="trenaTabs",
                    tabPanel(title="IGV",             value="igvTab",          igvShinyOutput('igvShiny')),
                    tabPanel(title="READ ME",         includeHTML("readme.html")),
-                   tabPanel(title="trena model",     value="geneModelTab",    DTOutput("geneModelTable")),
+                   tabPanel(title="trena model",     value="geneModelTab",
+                            mainPanel(radioButtons("tfSelectionChoice", "Row (transcription factor) selection will display:",
+                                                   c("XY plot" = "xyPlot",
+                                                     "Binding sites" = "displayBindingSites"),
+                                                   inline=TRUE),
+                                      DTOutput("geneModelTable")
+                                      )),
                    tabPanel(title="SNP",             value="snpInfoTab",      mainPanel(
                                                                                  verbatimTextOutput("tfbsText"),
                                                                                  DTOutput("snpMotifTable"),
                                                                                  imageOutput("logoImage"))
                                                                                  ),
                    tabPanel(title="TF/TREM2 xy plot",  value="plotTab", plotOutput("xyPlot", height=800))
-                   )
-       ) # mainPanel
+                   ) # tabsetPanel
+      )  # mainPanel
     ) # sidebarLayout
   ) # fluidPage
 
@@ -135,11 +145,11 @@ server <- function(input, output, session) {
          output$logoImage <- renderImage({
                  list(src=image.filename,
                       contentType="image/png",
-                      width=500,
+                      width=800,
                       height=500,
-                      alt="alt text")},
+                      alt="png file not found")},
                  deleteFile=FALSE)
-         }, 0.5)
+         }, 1)
          updateTabsetPanel(session, "trenaTabs", select="snpInfoTab");
          } # if tfbs-snp
       })
@@ -172,7 +182,7 @@ server <- function(input, output, session) {
       myFunc <- function(){
          session$sendCustomMessage(type="showGenomicRegion", message=(list(region=roi)))
          } # myFunc
-      later(myFunc, 5)
+      later(myFunc, 4)
       later(function() {updateSelectInput(session, "displayGenomicRegion", selected=character(0))}, 1)
       })
 
@@ -224,51 +234,63 @@ server <- function(input, output, session) {
      })
 
    observeEvent(input$geneModelTable_cell_clicked, {
-      printf("--- input$geneModelTable_cell_clicked")
-      selectedTableRow <- input$geneModelTable_row_last_clicked
-      if(!is.null(selectedTableRow)){
-         tbl.model <- state$currentModel
-         tf <- tbl.model$gene[selectedTableRow]
-         if(length(tf) > 0){
+      trueRowClick <- length(input$geneModelTable_cell_clicked) > 0
+      printf("--- input$geneModelTable_cell_clicked: %s", trueRowClick)
+      if(trueRowClick){
+         selectedTableRow <- input$geneModelTable_row_last_clicked
+         if(!is.null(selectedTableRow)){
+            tbl.model <- state$currentModel
+            tf <- tbl.model$gene[selectedTableRow]
             printf("table row clicked: %s", tf );
-            # updatePlot(session, tf, state$currentModelName);
-            updateTabsetPanel(session, "trenaTabs", select="igvTab");
-            later(function(){selectRows(dt.proxy, NULL)}, 0.5);
-            later(function(){displayBindingSites(session, input, tf)}, 1);
-            }
-         } # row not null
-      })
+            later(function(){selectRows(dt.proxy, NULL)}, 0.01);
+            if(length(tf) > 0){
+               #browser()
+               tfSelectionAction <- isolate(input$tfSelectionChoice)
+               if(tfSelectionAction == "xyPlot"){
+                  updateTabsetPanel(session, "trenaTabs", select="plotTab");
+                  tokens <- strsplit(state$currentModelName, "\\.")[[1]]
+                  expression.matrix.id <- tokens[length(tokens)]
+                  output$xyPlot = renderPlot(plotTfTargetGeneCorrelation(session, tf, expression.matrix.id))
+                  }
+               if(tfSelectionAction == "displayBindingSites"){
+                  displayBindingSites(session, tf)
+                  }
+               } # if tf
+            } # row not null
+         } # if trueRowClick
+      }) # geneModelTable_cell_clicked
 
-   output$xyPlot = renderPlot(
-       {print(" ---- renderPlot");
-        selectedTableRow <- input$geneModelTable_row_last_clicked
-        tbl.model <- state$currentModel
-        browser()
-        tf <- tbl.model$gene[selectedTableRow]
-        printf("want an xyplot of %s vs. TREM2", tf)
-        tbl.model <- state$currentModel
-        tf <- tbl.model$gene[selectedTableRow]
-        target <- "FLT1";
-        tbl.pheno <- tbl.pheno[colnames(mtx),]
-        males   <- which(tbl.pheno$sex_s == "male")
-        females <- which(tbl.pheno$sex_s == "female")
-        colors <- rep("blue", nrow(tbl.pheno))
-        colors[females] <- "red"
-        tbl.males <- as.data.frame(t(mtx[c(tf, target), males]))
-        tbl.females <- as.data.frame(t(mtx[c(tf, target), females]))
-        model.male <- lm(sprintf("%s ~ %s", target, tf), data=tbl.males)
-        model.female <- lm(sprintf("%s ~ %s", target, tf), data=tbl.females)
-        plot(as.numeric(mtx[tf,]), as.numeric(mtx[target,]), xlab=tf, ylab=target, col=colors)
-        abline(model.male, col="blue")
-        abline(model.female, col="red")
-        printf("  male: ")
-        print(summary(model.male))
-        printf("  female: ")
-        print(summary(model.female))
-        })
+   #output$xyPlot = renderPlot(
+   #    {print(" ---- renderPlot");
+   #     selectedTableRow <- input$geneModelTable_row_last_clicked
+   #     tbl.model <- state$currentModel
+   #     browser()
+   #     tf <- tbl.model$gene[selectedTableRow]
+   #     printf("want an xyplot of %s vs. TREM2", tf)
+   #     tbl.model <- state$currentModel
+   #     tf <- tbl.model$gene[selectedTableRow]
+   #     target <- "FLT1";
+   #     tbl.pheno <- tbl.pheno[colnames(mtx),]
+   #     males   <- which(tbl.pheno$sex_s == "male")
+   #     females <- which(tbl.pheno$sex_s == "female")
+   #     colors <- rep("blue", nrow(tbl.pheno))
+   #     colors[females] <- "red"
+   #     tbl.males <- as.data.frame(t(mtx[c(tf, target), males]))
+   #     tbl.females <- as.data.frame(t(mtx[c(tf, target), females]))
+   #     model.male <- lm(sprintf("%s ~ %s", target, tf), data=tbl.males)
+   #     model.female <- lm(sprintf("%s ~ %s", target, tf), data=tbl.females)
+   #     plot(as.numeric(mtx[tf,]), as.numeric(mtx[target,]), xlab=tf, ylab=target, col=colors)
+   #     abline(model.male, col="blue")
+   #     abline(model.female, col="red")
+   #     printf("  male: ")
+   #     print(summary(model.male))
+   #     printf("  female: ")
+   #     print(summary(model.female))
+   #     })
 
    output$geneModelTable <- renderDT(
       {model.name <- input$geneModel;
+       updateTabsetPanel(session, "trenaTabs", select="geneModelTab");
        printf("    rendering DT, presumably because input$geneModel changes, model.name: %s", model.name);
        selection="single"
        tbl.model <- all.models[[model.name]]$model
@@ -417,11 +439,12 @@ removeTrack <- function(session, trackName)
 
 } # removeTrack
 #----------------------------------------------------------------------------------------------------
-displayBindingSites <- function(session, input, target.tf)
+displayBindingSites <- function(session, target.tf)
 {
    #tbl.bindingSites <- all.models[[state$currentModelName]]$regulatoryRegions
-   browser()
+   #browser()
    #printf(" looking for binding sites in %s", state$currentModelName)
+   updateTabsetPanel(session, "trenaTabs", select="igvTab");
    if(!target.tf %in% tbl.fimoHitsInEnhancers$tf){
       printf("tf %s not found in tbl.fimoHitsInEnhancers", target.tf, state$currentModelName)
       return()
@@ -453,6 +476,84 @@ displayBindingSites <- function(session, input, target.tf)
 
 
 } # displayBindingSites
+#------------------------------------------------------------------------------------------------------------------------
+# tbl.pheno$Diagnosis distribution in temporal cortex data
+#   AMP-AD_MayoBB_UFL-Mayo-ISB_IlluminaHiSeq2000_TCX_Covariates_Flowcell_1.csv
+#
+# cerebellum phenotypes not yet found  (11 jun 2018)
+#
+#                AD   84
+#           Control   80
+#  Pathologic Aging   30
+#               PSP   84
+#
+plotTfTargetGeneCorrelation <- function(session, tf, expression.matrix.id)
+{
+   stopifnot(expression.matrix.id %in% c("cer", "tcx"))
+   mtx <- switch(expression.matrix.id,
+                 cer = mtx.cer,
+                 tcx = mtx.tcx
+                 )
+   printf("want an xyplot of %s vs. TREM2", tf)
+   covariates.file <- "../dataPrep/AMP-AD_MayoBB_UFL-Mayo-ISB_IlluminaHiSeq2000_TCX_Covariates_Flowcell_1.csv"
+   tbl.pheno <- read.table(covariates.file, sep=",", as.is=TRUE, header=TRUE)
+
+   if(expression.matrix.id == "tcx"){ # we have phenotype data
+      samples.AD <- intersect(subset(tbl.pheno, Diagnosis=="AD")$ID, colnames(mtx))
+      samples.ctl <- intersect(subset(tbl.pheno, Diagnosis=="Control")$ID, colnames(mtx))
+      samples.pathAging <- intersect(subset(tbl.pheno, Diagnosis=="Pathologic Aging")$ID, colnames(mtx))
+      samples.PSP  <- intersect(subset(tbl.pheno, Diagnosis=="PSP")$ID, colnames(mtx))
+      samples.all <- colnames(mtx)
+
+      color.choices <- list(AD="red",
+                            pathAging="green",
+                            PSP="blue",
+                            control="black"
+                            )
+
+      colors <- rep("black", length(samples.all))
+      colors[match(samples.AD, colnames(mtx))] <- color.choices$AD
+      colors[match(samples.ctl, colnames(mtx))] <- color.choices$control
+      colors[match(samples.pathAging, colnames(mtx))] <- color.choices$pathAging
+      colors[match(samples.PSP, colnames(mtx))] <- color.choices$PSP
+
+      plot(mtx[tf, samples.all], mtx[targetGene, samples.all],main="Gene Expression - Temporal Cortex",
+           xlab=tf, ylab=targetGene, col=colors, pch=19, xlim=c(-3,3), ylim=c(-3,3))
+
+      tbl.AD <- as.data.frame(t(mtx[c(tf, targetGene), samples.AD]))
+      model.AD <- lm(sprintf("%s ~ %s", targetGene, tf), data=tbl.AD)
+      abline(model.AD, col=color.choices$AD)
+
+      tbl.control <- as.data.frame(t(mtx[c(tf, targetGene), samples.ctl]))
+      model.control <- lm(sprintf("%s ~ %s", targetGene, tf), data=tbl.control)
+      abline(model.control, col=color.choices$control)
+
+      #browser()
+
+      tbl.pathAging <- as.data.frame(t(mtx[c(tf, targetGene), samples.pathAging]))
+      model.pathAging <- lm(sprintf("%s ~ %s", targetGene, tf), data=tbl.pathAging)
+      abline(model.pathAging, col=color.choices$pathAging)
+
+      tbl.PSP <- as.data.frame(t(mtx[c(tf, targetGene), samples.PSP]))
+      model.PSP <- lm(sprintf("%s ~ %s", targetGene, tf), data=tbl.PSP)
+      abline(model.PSP, col=color.choices$PSP)
+
+      legend.names <- names(color.choices)
+      for(i in seq_len(length(legend.names))){
+         condition <- legend.names[i]
+         rsq <- eval(parse(text=sprintf("summary(model.%s)$r.squared", condition)))
+         legend.names [i] <- sprintf("%s (rSq=%5.3f)", condition, rsq)
+         }
+      legend (1.8, -1.8, legend.names, as.character(color.choices))
+      }
+   else{  # no phenotype data, use all samples
+      tf.vals <- mtx[tf, ]
+      targetGene.vals <- mtx[targetGene,]
+      plot(tf.vals, targetGene.vals, main="Gene Expression - Cerebellum", xlab=tf, ylab=targetGene)
+      }
+
+
+} # plotTfTargetGeneCorrelation
 #------------------------------------------------------------------------------------------------------------------------
 #Sys.sleep(3)
 #shinyApp(ui, server)
