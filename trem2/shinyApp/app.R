@@ -22,9 +22,10 @@ for(model.name in model.names){
 
 load("../dataPrep/mtx.withDimers.cer.ros.tcx.RData")
 
+print(load("../dataPrep/tbl.fimo.15tfs.16435bindingSites.RData"))  # tbl.fimo
 #----------------------------------------------------------------------------------------------------
 load("enhancers.RData")
-load("snps.RData")
+load("snps.RData")               # tbl.snp, tbl.eqtl
 load("tbl.bindingSitesWithSnpsAndDeltaScores.RData")
 load("tbl.fimoHitsInEnhancers.RData")
 #----------------------------------------------------------------------------------------------------
@@ -69,24 +70,30 @@ ui <- fluidPage(
                      "Carrasquillo 2016 eqtl snps"="eqtl.snps"
                      )),
 
-       sliderInput("IGAP.snp.significance", "-log10 (SNP pval)",
+       sliderInput("IGAP.snp.significance", "SNP score",
                     value = 2, #fivenum(-log10(tbl.bs$gwasPval))[3],
                     step=0.1,
                     min = 0,
                     max = 12),
-       sliderInput("fimo.motif.significance", "-log10 (FIMO motif pval)",
+       sliderInput("fimo.motif.significance", "FIMO motif score",
                     value = 2, #fivenum(-log10(tbl.bs$motif.pVal))[3],
                     step=0.1,
                     min = 0,
                     max = 12,
                     round=-2),
-       sliderInput("fimo.snp.effect", "-log10 (FIMO SNP effect) - delta qval",
+       sliderInput("fimo.snp.effect", "SNP binding affinity loss score",
                     value = 0.5,
                     step=0.1,
                     min = 0,
                     max = 12),
-        actionButton("findDisruptiveSNPsButton", "Find SNPs which disrupt TF binding sites")
-        ),
+       actionButton("findDisruptiveSNPsButton", "SNPs which disrupt TF binding sites"),
+       HTML("<br><br><br>"),
+       sliderInput("snpShoulder", "Proximity",
+                   value = 5,
+                   min = 0,
+                   max = 100),
+       actionButton("showSNPsNearBindingSitesButton", "SNPs near binding sites")
+       ),
 
      mainPanel(
        tabsetPanel(type="tabs",
@@ -182,7 +189,7 @@ server <- function(input, output, session) {
       myFunc <- function(){
          session$sendCustomMessage(type="showGenomicRegion", message=(list(region=roi)))
          } # myFunc
-      later(myFunc, 4)
+      later(myFunc, 2)
       later(function() {updateSelectInput(session, "displayGenomicRegion", selected=character(0))}, 1)
       })
 
@@ -233,6 +240,51 @@ server <- function(input, output, session) {
      session$sendCustomMessage(type="roi", message=(list(roi=roi.string)))
      })
 
+   observeEvent(input$showSNPsNearBindingSitesButton, {
+      shoulder <- isolate(input$snpShoulder)
+      snpSignificanceThreshold <- isolate(session$input$IGAP.snp.significance)
+      motifMatchThreshold <- isolate(session$input$fimo.motif.significance)
+
+      tbl.tfbs <- subset(tbl.fimo, -log10(motif.pVal) >= motifMatchThreshold)
+      tbl.tfbs <- tbl.tfbs[, c("chrom", "motifStart", "motifEnd", "motif.pVal", "motifName")]
+      tbl.tfbs$score <- -log10(tbl.tfbs$motif.pVal)
+      tbl.tfbs <- tbl.tfbs[, c("chrom", "motifStart", "motifEnd", "score", "motifName")]
+      colnames(tbl.tfbs) <- c("chrom", "start", "end", "Score", "motifName")
+      tbl.snpsNearEnough <- data.frame()
+      gr.snps <- GRanges(tbl.snp)
+      gr.tfbs <- GRanges(data.frame(chrom=tbl.tfbs$chrom,
+                                    start=tbl.tfbs$start - shoulder,
+                                    end=tbl.tfbs$end+shoulder))
+      tbl.ov <- as.data.frame(findOverlaps(gr.snps, gr.tfbs))
+      colnames(tbl.ov) <- c("snp", "tfbs")
+      tbl.snpsNearEnough <- tbl.snp[tbl.ov$snp, c("chrom", "start", "end", "rsid")]
+      motifNames <- tbl.tfbs$motifName[tbl.ov$tfbs]
+      tbl.snpsNearEnough$motifName <- motifNames
+      gr.eqtl <- GRanges(tbl.eqtl)
+      tbl.ov <- as.data.frame(findOverlaps(gr.eqtl, gr.tfbs))
+      colnames(tbl.ov) <- c("snp", "tfbs")
+      motifNames <- tbl.tfbs$motifName[tbl.ov$tfbs]
+      tbl.new <- tbl.eqtl[tbl.ov$snp, c("chrom", "start", "end", "rsid")]
+      tbl.new$motifName <- motifNames
+      tbl.snpsNearEnough <- rbind(tbl.snpsNearEnough, tbl.new)
+      rownames(tbl.snpsNearEnough) <- NULL
+      tbl.snpsNearEnough <- unique(tbl.snpsNearEnough)
+      tbl.snpsNearEnough$name <- with(tbl.snpsNearEnough, paste(rsid, motifName, sep=":"))
+      tbl.snpsNearEnough <- tbl.snpsNearEnough[, c("chrom", "start", "end", "name")]
+      temp.filename <- tempfile(tmpdir="tmp", fileext=".bed")
+      write.table(tbl.snpsNearEnough, sep="\t", row.names=FALSE, col.names=FALSE, quote=FALSE, file=temp.filename)
+
+      updateTabsetPanel(session, "trenaTabs", select="igvTab");
+      later(function(){
+         session$sendCustomMessage(type="displayBedTrack",
+                                   message=(list(filename=temp.filename,
+                                                 trackName="nearby snps",
+                                                 displayMode="EXPANDED",
+                                                 color="red",
+                                                 trackHeight=40)))
+         }, 1)
+      })
+
    observeEvent(input$geneModelTable_cell_clicked, {
       trueRowClick <- length(input$geneModelTable_cell_clicked) > 0
       printf("--- input$geneModelTable_cell_clicked: %s", trueRowClick)
@@ -241,11 +293,11 @@ server <- function(input, output, session) {
          if(!is.null(selectedTableRow)){
             tbl.model <- state$currentModel
             tf <- tbl.model$gene[selectedTableRow]
-            printf("table row clicked: %s", tf );
             later(function(){selectRows(dt.proxy, NULL)}, 0.01);
             if(length(tf) > 0){
                #browser()
                tfSelectionAction <- isolate(input$tfSelectionChoice)
+               printf("table row clicked: %s  - actionRequested: %s", tf, tfSelectionAction);
                if(tfSelectionAction == "xyPlot"){
                   updateTabsetPanel(session, "trenaTabs", select="plotTab");
                   tokens <- strsplit(state$currentModelName, "\\.")[[1]]
@@ -416,23 +468,6 @@ calculateVisibleSNPs <- function(targetGene, roi, filters, snpShoulder)
 
 } # calculateVisibleSNPs
 #----------------------------------------------------------------------------------------------------
-createMotifLogo.pngs <- function(pfms)
-{
-   #load("tbl.bindingSitesWithSnpsAndDeltaScores.RData")
-   #tfs <- unique(tbl.bs$tf)
-   # pfms.1 <- query(MotifDb, "sapiens", c("hocomoco", "jaspar2018", "swissregulon"))
-   #pfms.tf <- query(pfms.1, "", tfs)
-   #length(pfms.tf)
-   for(pfm.name in names(pfms.oi)){
-      filename <- file.path("../shinyApp", "png", sprintf("%s.png", pfm.name))
-      printf("filename: %s", filename)
-      png(filename)
-      plotMotifs(pfms.oi[pfm.name])
-      dev.off()
-      } # for i
-
-} # createMotifLogo.pngs
-#------------------------------------------------------------------------------------------------------------------------
 removeTrack <- function(session, trackName)
 {
   session$sendCustomMessage(type="removeTrack", message=list(trackName=trackName))
@@ -441,39 +476,27 @@ removeTrack <- function(session, trackName)
 #----------------------------------------------------------------------------------------------------
 displayBindingSites <- function(session, target.tf)
 {
-   #tbl.bindingSites <- all.models[[state$currentModelName]]$regulatoryRegions
-   #browser()
-   #printf(" looking for binding sites in %s", state$currentModelName)
-   updateTabsetPanel(session, "trenaTabs", select="igvTab");
+   # browser()
+   xyz <- "--- displayBindingSites, consult tbl.fimo..."
    if(!target.tf %in% tbl.fimoHitsInEnhancers$tf){
       printf("tf %s not found in tbl.fimoHitsInEnhancers", target.tf, state$currentModelName)
       return()
       }
-      # two kinds of bindingSite tables: one from footprint database (has "fp_start"), one from
-      # MotifMatcher (has "motifStart").  branch appropriately
-   #if("fp_start" %in% colnames(tbl.bindingSites))
-   #   tbl.tfbs <- subset(tbl.bindingSites, geneSymbol==tf)[, c("chrom", "fp_start", "fp_end", "shortMotif")]
-   #if("motifStart" %in% colnames(tbl.bindingSites))
-      #tbl.tfbs <- subset(tbl.bindingSites, geneSymbol==tf)[, c("chrom", "motifStart", "motifEnd", "shortMotif")]
-     #threshold <- isolate(input$pwmMatchThreshold) / 100
-     # printf("---  using slider threshold %f", threshold);
-     #tbl.tfbs <- subset(tbl.bindingSites, motifRelativeScore >= threshold)[, c("chrom", "motifStart", "motifEnd", "motifRelativeScore")]
-     # tbl.tfbs <- tbl.tfbs[order(tbl.tfbs$motifStart, decreasing=FALSE),]
-   tbl.tfbs <- subset(tbl.fimoHitsInEnhancers, tf==target.tf & p.value < 1e-4)
-   tbl.tfbs$chrom <- "chr6"
-   tbl.tfbs <- tbl.tfbs[, c("chrom", "start", "end", "motif", "p.value")]
-   printf("      found %d sites", nrow(tbl.tfbs))
-   #printf("scores on binding sites: ")
-   #print(fivenum(tbl.tfbs$motifRelativeScore))
+   motif.pVal.threshold <- isolate(session$input$fimo.motif.significance)
+   tbl.tfbs <- subset(tbl.fimo, tf==target.tf & -log10(motif.pVal) >= motif.pVal.threshold)
+   tbl.tfbs <- tbl.tfbs[, c("chrom", "motifStart", "motifEnd", "motif.pVal")]
+   tbl.tfbs$score <- -log10(tbl.tfbs$motif.pVal)
+   tbl.tfbs <- tbl.tfbs[, c("chrom", "motifStart", "motifEnd", "score")]
    temp.filename <- tempfile(tmpdir="tmp", fileext=".bed")
    write.table(tbl.tfbs, sep="\t", row.names=FALSE, col.names=FALSE, quote=FALSE, file=temp.filename)
-   session$sendCustomMessage(type="displayBedTrack",
-                                message=(list(filename=temp.filename,
-                                              trackName=target.tf,
-                                              color="darkRed",
-                                              trackHeight=40)))
-
-
+   updateTabsetPanel(session, "trenaTabs", select="igvTab");
+   later(function(){
+       session$sendCustomMessage(type="displayBedTrack",
+                                   message=(list(filename=temp.filename,
+                                                 trackName=target.tf,
+                                                 color="darkGreen",
+                                                 trackHeight=40)))
+       }, 1)
 
 } # displayBindingSites
 #------------------------------------------------------------------------------------------------------------------------
@@ -544,7 +567,7 @@ plotTfTargetGeneCorrelation <- function(session, tf, expression.matrix.id)
          rsq <- eval(parse(text=sprintf("summary(model.%s)$r.squared", condition)))
          legend.names [i] <- sprintf("%s (rSq=%5.3f)", condition, rsq)
          }
-      legend (1.8, -1.8, legend.names, as.character(color.choices))
+      legend (1.5, -1.8, legend.names, as.character(color.choices))
       }
    else{  # no phenotype data, use all samples
       tf.vals <- mtx[tf, ]
