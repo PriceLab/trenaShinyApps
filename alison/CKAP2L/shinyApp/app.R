@@ -129,7 +129,7 @@ ui <- fluidPage(
                                                                                  DTOutput("snpMotifTable"),
                                                                                  imageOutput("logoImage"))
                                                                                  ),
-                   tabPanel(title="TF/TREM2 xy plot",  value="plotTab", plotOutput("xyPlot", height=800))
+                   tabPanel(title="TF/CKAP2L xy plot",  value="plotTab", plotOutput("xyPlot", height=800))
                    ) # tabsetPanel
       )  # mainPanel
     ) # sidebarLayout
@@ -331,7 +331,7 @@ server <- function(input, output, session) {
    #     tbl.model <- state$currentModel
    #     browser()
    #     tf <- tbl.model$gene[selectedTableRow]
-   #     printf("want an xyplot of %s vs. TREM2", tf)
+   #     printf("want an xyplot of %s vs. CKAP2L", tf)
    #     tbl.model <- state$currentModel
    #     tf <- tbl.model$gene[selectedTableRow]
    #     target <- "FLT1";
