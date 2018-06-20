@@ -103,13 +103,13 @@ ui <- fluidPage(
                     step=0.1,
                     min = 0,
                     max = 12),
-       actionButton("findDisruptiveSNPsButton", "SNPs which disrupt TF binding sites"),
+       # actionButton("findDisruptiveSNPsButton", "SNPs which disrupt TF binding sites"),
        HTML("<br><br><br>"),
        sliderInput("snpShoulder", "Proximity",
                    value = 5,
                    min = 0,
                    max = 100),
-       actionButton("showSNPsNearBindingSitesButton", "SNPs near binding sites")
+       actionButton("showSNPsNearBindingSitesButton", "Binding sites near SNPs")
        ),
 
      mainPanel(
@@ -129,7 +129,7 @@ ui <- fluidPage(
                                                                                  DTOutput("snpMotifTable"),
                                                                                  imageOutput("logoImage"))
                                                                                  ),
-                   tabPanel(title="TF/CKAP2L xy plot",  value="plotTab", plotOutput("xyPlot", height=800))
+                   tabPanel(title="TF/CKAP2L plot",  value="plotTab", plotOutput("xyPlot", height=800))
                    ) # tabsetPanel
       )  # mainPanel
     ) # sidebarLayout
