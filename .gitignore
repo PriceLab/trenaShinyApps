@@ -6,7 +6,6 @@ alison/trenaDB/pkgs/crosstalk_1.0.1.tar.gz
 alison/trenaDB/pkgs/DT_0.4.4.tar.gz
 alison/trenaDB/pkgs/htmlwidgets_1.1.tar.gz
 dockerImages/trenaPrereqsCode/SNPlocs.Hsapiens.dbSNP150.GRCh38_0.99.20.tar.gz
-dockerImages/trenaPrereqsData/SNPlocs.Hsapiens.dbSNP150.GRCh38_0.99.20.tar.gz
 trem2/pkgs/igvShiny_0.99.15.tar.gz
 trem2/pkgs/MotifDb_1.23.10.tar.gz
 
