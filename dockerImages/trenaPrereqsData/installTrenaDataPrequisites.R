@@ -12,6 +12,7 @@ source("http://bioconductor.org/biocLite.R")
 data.pkgs <- c(
                "BSgenome",
                "BSgenome.Hsapiens.UCSC.hg38",
+               "BSgenome.Hsapiens.UCSC.hg19",
                "org.Hs.eg.db",
                "BSgenome.Athaliana.TAIR.TAIR9"
                )
