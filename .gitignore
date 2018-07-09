@@ -8,6 +8,10 @@ alison/trenaDB/pkgs/htmlwidgets_1.1.tar.gz
 dockerImages/trenaPrereqsCode/SNPlocs.Hsapiens.dbSNP150.GRCh38_0.99.20.tar.gz
 trem2/pkgs/igvShiny_0.99.15.tar.gz
 trem2/pkgs/MotifDb_1.23.10.tar.gz
+trem2/shinyApp/data/
+trem2/shinyApp/png/
+trem2/shinyApp/tmp/
+
 
 alison/CKAP2L/data/CPMNorm_5252018.RData
 alison/CKAP2L/data/enhancers.RData

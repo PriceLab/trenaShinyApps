@@ -5,13 +5,13 @@ library(htmlwidgets)
 library(GenomicRanges)
 library(later)
 library(MotifDb)
-library(motifStack)
+#library(motifStack)
 library(RUnit)
 #----------------------------------------------------------------------------------------------------
 targetGene <- "TREM2"
-load("trem2-models.RData")
+load("data/trem2-models.RData")
 models <- all.models
-load("dhs.RData") # tbl.dhs
+load("data/dhs.RData") # tbl.dhs
 addResourcePath("tmp", "tmp") # so the shiny webserver can see, and return track files for igv
 
 model.names <- names(all.models)
@@ -20,14 +20,14 @@ for(model.name in model.names){
    modelList <- c(modelList, eval(parse(text=sprintf('c("%s"="%s")', model.name, model.name))))
    }
 
-load("../dataPrep/mtx.withDimers.cer.ros.tcx.RData")
+load("data/mtx.withDimers.cer.ros.tcx.RData")
 
-print(load("../dataPrep/tbl.fimo.15tfs.16435bindingSites.RData"))  # tbl.fimo
+print(load("data/tbl.fimo.15tfs.16435bindingSites.RData"))  # tbl.fimo
 #----------------------------------------------------------------------------------------------------
-load("enhancers.RData")
-load("snps.RData")               # tbl.snp, tbl.eqtl
-load("tbl.bindingSitesWithSnpsAndDeltaScores.RData")
-load("tbl.fimoHitsInEnhancers.RData")
+load("data/enhancers.RData")
+load("data/snps.RData")               # tbl.snp, tbl.eqtl
+load("data/tbl.bindingSitesWithSnpsAndDeltaScores.RData")
+load("data/tbl.fimoHitsInEnhancers.RData")
 #----------------------------------------------------------------------------------------------------
 tss <- 41163186
 currentFilters <- list()
@@ -138,7 +138,7 @@ server <- function(input, output, session) {
       print(input$trackClick)
       motifName <- input$trackClick$id
       if(grepl("^tfbs-snp", motifName)){
-         load("tbl.bindingSitesWithSnpsAndDeltaScores.RData")
+         load("data/tbl.bindingSitesWithSnpsAndDeltaScores.RData")
          tokens <- strsplit(motifName, ":")[[1]]
          pfm.name <- tokens[2]
          snp.name <- tokens[3]
@@ -518,7 +518,7 @@ plotTfTargetGeneCorrelation <- function(session, tf, expression.matrix.id)
                  tcx = mtx.tcx
                  )
    printf("want an xyplot of %s vs. TREM2", tf)
-   covariates.file <- "../dataPrep/AMP-AD_MayoBB_UFL-Mayo-ISB_IlluminaHiSeq2000_TCX_Covariates_Flowcell_1.csv"
+   covariates.file <- "data/AMP-AD_MayoBB_UFL-Mayo-ISB_IlluminaHiSeq2000_TCX_Covariates_Flowcell_1.csv"
    tbl.pheno <- read.table(covariates.file, sep=",", as.is=TRUE, header=TRUE)
 
    if(expression.matrix.id == "tcx"){ # we have phenotype data
@@ -578,5 +578,11 @@ plotTfTargetGeneCorrelation <- function(session, tf, expression.matrix.id)
 
 } # plotTfTargetGeneCorrelation
 #------------------------------------------------------------------------------------------------------------------------
-#Sys.sleep(3)
-#shinyApp(ui, server)
+if(Sys.info()[["nodename"]] == "trena.systemsbiology.net"){
+    port <- 60030
+    printf("running on trena, using port %d", port)
+    shinyOptions <- list(host="0.0.0.0", port=port, launch.browser=FALSE)
+}
+app <- shinyApp(ui=ui,server=server, options=shinyOptions)
+
+
