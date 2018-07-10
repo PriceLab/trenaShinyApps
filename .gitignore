@@ -14,6 +14,7 @@ trem2/shinyApp/tmp/
 
 dockerImages/trenaPrereqsData/packages/
 dockerImages/trenaPrereqsCode/packages/
+dockerImages/trenaBase/packages/
 
 
 alison/CKAP2L/data/CPMNorm_5252018.RData
