@@ -8,6 +8,16 @@ library(MotifDb)
 #library(motifStack)
 library(RUnit)
 #----------------------------------------------------------------------------------------------------
+stopifnot(file.exists("data/trem2-models.RData"))
+stopifnot(file.exists("data/dhs.RData"))
+stopifnot(file.exists("data/mtx.withDimers.cer.ros.tcx.RData"))
+stopifnot(file.exists("data/tbl.fimo.15tfs.16435bindingSites.RData"))
+stopifnot(file.exists("data/enhancers.RData"))
+stopifnot(file.exists("data/snps.RData"))
+stopifnot(file.exists("data/tbl.bindingSitesWithSnpsAndDeltaScores.RData"))
+stopifnot(file.exists("data/tbl.fimoHitsInEnhancers.RData"))
+stopifnot(file.exists("data/tbl.bindingSitesWithSnpsAndDeltaScores.RData"))
+#----------------------------------------------------------------------------------------------------
 targetGene <- "TREM2"
 load("data/trem2-models.RData")
 models <- all.models
