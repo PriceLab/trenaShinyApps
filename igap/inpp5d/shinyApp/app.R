@@ -14,8 +14,8 @@ load("data/mtx.withDimers.cer.ros.tcx.RData")     # "mtx.cer" "mtx.ros" "mtx.tcx
 load("data/tbl.enhancers.RData")                  # "tbl.enhancers"
 load("data/tbl.gwas.igap.snp.RData")              # "tbl.snp"
 load("data/tbl.enhancer.gwas.igap.snp.RData")     # "tbl.enhancer.snps"
-load("data/tbl.breaks.Rdata")                     # "tbl.breaks"
-load("data/tbl.breaksBed.Rdata")                  # "tbl.breaksBed"
+load("data/tbl.breaks.RData")                     # "tbl.breaks"
+load("data/tbl.breaksBed.RData")                  # "tbl.breaksBed"
 load("data/tbl.fimo.5tfs.bindingSites.RData")     # tbl.fimo
 
 #load("dhs.RData") # tbl.dhs
