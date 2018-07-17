@@ -1,9 +1,8 @@
 library(shiny)
 library(Rmpfr)
 
-shinyUI(
-    fluidPage(
-        titlePanel("Euler's e in arbitrary precision", "Euler's e"),
+ui <- fluidPage(
+        titlePanel("Euler's e in arbitrary precision (pshannon 456p 9 jul)", "Euler's e"),
         tags$br(),
 
         fluidRow(
@@ -17,10 +16,9 @@ shinyUI(
         tags$br(),
         tags$p("We wish  to acknowledge Leonhard Euler for his number and Martin Maechler for his Rmpfr package.")
     )
-)
 
 
-shinyServer(function(input, output){
+server <- function(input, output, session){
 
 
       output$result <- renderText({
@@ -35,17 +33,15 @@ shinyServer(function(input, output){
 
           })
 
-      })
+      } # server
 
 #----------------------------------------------------------------------------------------------------
+launchBrowser <- TRUE
 port <- 60030
-launchBrowser=TRUE
 
 if(Sys.info()[["nodename"]] == "trena.systemsbiology.net"){
-   launchBrowser=FALSE
    printf("running on trena, using port %d", port)
+   launchBrowser <- FALSE
    }
-
 shinyOptions <- list(host="0.0.0.0", port=port, launch.browser=launchBrowser)
-# app <- shinyApp(ui=ui, server=server, options=shinyOptions)
-
+app <- shinyApp(ui=ui,server=server, options=shinyOptions)

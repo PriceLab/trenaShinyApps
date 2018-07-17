@@ -7,6 +7,7 @@ RUN apt-get install libpq-dev -y
 RUN sudo apt-get install libpng-dev -y
 RUN sudo apt-get install zlib1g-dev -y
 COPY installTrenaCodePrequisites.R /home/trena
+COPY myRprofile /home/trena
 USER trena
 WORKDIR /home/trena
 RUN R -f ./installTrenaCodePrequisites.R
