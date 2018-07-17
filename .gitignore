@@ -93,6 +93,17 @@ igap/inpp5d/shinyApp/data/tbl.enhancers.RData
 igap/inpp5d/shinyApp/data/tbl.gwas.igap.snp.RData
 igap/inpp5d/shinyApp/data/tbl.model.RData
 
+inpp5d/shinyApp/data/AMP-AD_MayoBB_UFL-Mayo-ISB_IlluminaHiSeq2000_TCX_Covariates_Flowcell_1.csv
+inpp5d/shinyApp/png/rs10933435.png
+inpp5d/shinyApp/png/rs11892545.png
+inpp5d/shinyApp/png/rs12694925.png
+inpp5d/shinyApp/png/rs13425849.png
+inpp5d/shinyApp/png/rs56307293.png
+inpp5d/shinyApp/png/rs6437088.png
+inpp5d/shinyApp/png
+inpp5d/shinyApp/tmp/*.bed
+
+
 
 .RData
 /tmp/*
