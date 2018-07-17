@@ -108,15 +108,24 @@ run <- function()
    tbl.fimo$tf <- tfs
    dim(tbl.fimo)   # 6089 x 12
    tbl.fimo <- tbl.fimo[, c("chrom", "start", "stop", "strand", "motif", "tf", "score", "pScore", "p.value", "q.value", "matched.sequence")]
+   tbl.fimo <- tbl.fimo[order(tbl.fimo$start, decreasing=FALSE),]
+   gr.fimo <- GRanges(tbl.fimo)   # save this for below
    colnames(tbl.fimo) <- c("chrom", "motifStart", "motifEnd", "strand", "motifName", "tf", "motifScore",
                            "motif.pScore", "motif.pVal", "motif.qVal", "sequence")
-   tbl.fimo <- tbl.fimo[order(tbl.fimo$motifStart, decreasing=FALSE),]
-   save(tbl.fimo, file="../shinyApp/data/tbl.fimo.5tfs.6089bindingSites.RData")
+   tbl.ov <- as.data.frame(findOverlaps(gr.enhancers, gr.fimo))
+   colnames(tbl.ov) <- c("enhancers", "tfbs")
+   tbl.fimoE <- tbl.fimo[unique(tbl.ov$tfbs),]
+   dim(tbl.fimoE)
+   tbl.fimo <- tbl.fimoE
+   save(tbl.fimo, file="../shinyApp/data/tbl.fimo.5tfs.bindingSites.RData")
 
    tfs <- unique(tbl.fimo$tf)
    length(tfs)
    table(tbl.fimo$tf)
    fivenum(tbl.fimo$motif.pScore)  # [1] 0.000000 0.000224 0.000486 0.000721 0.001000
+
+   track <- DataFrameAnnotationTrack("enhancers", tbl.enhancers[, c(1:3, 4)], color="purple", trackHeight=50)
+   displayTrack(igv, track)
 
    for(current.tf in tfs){
       tbl.tf <- subset(tbl.fimo, tf==current.tf & motif.pScore >= 4)

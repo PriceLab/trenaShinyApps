@@ -9,20 +9,20 @@ library(motifStack)
 library(RUnit)
 #----------------------------------------------------------------------------------------------------
 targetGene <- "INPP5D"
-load("data/tbl.model.RData")                   # "tbl.model"
-load("data/mtx.withDimers.cer.ros.tcx.RData")  # "mtx.cer" "mtx.ros" "mtx.tcx"
-load("data/tbl.enhancers.RData")               # "tbl.enhancers"
-load("data/tbl.gwas.igap.snp.RData")           # "tbl.snp"
-load("data/tbl.enhancer.gwas.igap.snp.RData")  # "tbl.enhancer.snps"
-load("data/tbl.breaks.Rdata")                  # "tbl.breaks"
-load("data/tbl.breaksBed.Rdata")               # "tbl.breaksBed"
+load("data/tbl.model.RData")                      # "tbl.model"
+load("data/mtx.withDimers.cer.ros.tcx.RData")     # "mtx.cer" "mtx.ros" "mtx.tcx"
+load("data/tbl.enhancers.RData")                  # "tbl.enhancers"
+load("data/tbl.gwas.igap.snp.RData")              # "tbl.snp"
+load("data/tbl.enhancer.gwas.igap.snp.RData")     # "tbl.enhancer.snps"
+load("data/tbl.breaks.Rdata")                     # "tbl.breaks"
+load("data/tbl.breaksBed.Rdata")                  # "tbl.breaksBed"
+load("data/tbl.fimo.5tfs.bindingSites.RData")     # tbl.fimo
 
 #load("dhs.RData") # tbl.dhs
 addResourcePath("tmp", "tmp") # so the shiny webserver can see, and return track files for igv
 
 model.names <- "fp + enhancers"
 models <- list("fp + enhancers" = tbl.model)
-#print(load("../dataPrep/tbl.fimo.15tfs.16435bindingSites.RData"))  # tbl.fimo
 #----------------------------------------------------------------------------------------------------
 #load("enhancers.RData")
 #load("snps.RData")               # tbl.snp, tbl.eqtl
@@ -54,7 +54,8 @@ ui <- fluidPage(
         width=3,
         selectInput("displayGenomicRegion", "Display Genomic Region:",
                     c("INPP5D +/- 40kb" = "tssPlusMinus40kb",
-                      "All INPP5D enhancers" = "enhancers")),
+                      "All INPP5D enhancers" = "enhancers",
+                      "TSS-proximal interesting snps"="interestingSnpsNearTSS")),
 
         #selectInput("geneModel", "Choose model:", models),
 
@@ -67,11 +68,11 @@ ui <- fluidPage(
                      "Motif-breaking SNPs"="breaking.snps"
                      )),
 
-      # sliderInput("IGAP.snp.significance", "SNP score",
-      #              value = 2, #fivenum(-log10(tbl.bs$gwasPval))[3],
-      #              step=0.1,
-      #              min = 0,
-      #              max = 12),
+       sliderInput("IGAP.snp.significance", "SNP score",
+                    value = 4,
+                    step=0.1,
+                    min = 0,
+                    max = 12),
       # sliderInput("fimo.motif.significance", "FIMO motif score",
       #              value = 2, #fivenum(-log10(tbl.bs$motif.pVal))[3],
       #              step=0.1,
@@ -86,10 +87,10 @@ ui <- fluidPage(
       # actionButton("findDisruptiveSNPsButton", "SNPs which disrupt TF binding sites"),
       # HTML("<br><br><br>"),
        sliderInput("snpShoulder", "Proximity",
-                   value = 5,
+                   value = 10,
                    min = 0,
                    max = 100),
-       actionButton("showSNPsNearBindingSitesButton", "SNPs near binding sites")
+       actionButton("showSNPsNearBindingSitesButton", "SNPs near binding sites in enhancer regions")
        ),
 
      mainPanel(
@@ -176,7 +177,8 @@ server <- function(input, output, session) {
       #printf("display event: %s", regionName)
       state$currentGenomicRegion <- regionName
       regions <- list(enhancers="chr2:232850784-233432949",
-                      tssPlusMinus40kb="chr2:233,058,937-233,248,903"
+                      tssPlusMinus40kb="chr2:233,058,937-233,248,903",
+                      interestingSnpsNearTSS="chr2:233,092,624-233,095,615"
                       )
       new.region.name <- input$displayGenomicRegion
       if(!new.region.name %in% names(regions))
@@ -240,13 +242,11 @@ server <- function(input, output, session) {
    observeEvent(input$showSNPsNearBindingSitesButton, {
       shoulder <- isolate(input$snpShoulder)
       snpSignificanceThreshold <- isolate(session$input$IGAP.snp.significance)
-      motifMatchThreshold <- isolate(session$input$fimo.motif.significance)
-
-      tbl.tfbs <- subset(tbl.fimo, -log10(motif.pVal) >= motifMatchThreshold)
-      tbl.tfbs <- tbl.tfbs[, c("chrom", "motifStart", "motifEnd", "motif.pVal", "motifName")]
-      tbl.tfbs$score <- -log10(tbl.tfbs$motif.pVal)
-      tbl.tfbs <- tbl.tfbs[, c("chrom", "motifStart", "motifEnd", "score", "motifName")]
-      colnames(tbl.tfbs) <- c("chrom", "start", "end", "Score", "motifName")
+      #motifMatchThreshold <- isolate(session$input$fimo.motif.significance)
+      tbl.tfbs <- subset(tbl.fimo, motif.pScore >= snpSignificanceThreshold)
+      tbl.tfbs <- tbl.tfbs[, c("chrom", "motifStart", "motifEnd", "motif.pVal", "motifName", "motif.pScore")]
+      tbl.tfbs <- tbl.tfbs[, c("chrom", "motifStart", "motifEnd", "motif.pScore", "motifName")]
+      colnames(tbl.tfbs) <- c("chrom", "start", "end", "score", "motifName")
       tbl.snpsNearEnough <- data.frame()
       gr.snps <- GRanges(tbl.snp)
       gr.tfbs <- GRanges(data.frame(chrom=tbl.tfbs$chrom,
@@ -257,13 +257,13 @@ server <- function(input, output, session) {
       tbl.snpsNearEnough <- tbl.snp[tbl.ov$snp, c("chrom", "start", "end", "rsid")]
       motifNames <- tbl.tfbs$motifName[tbl.ov$tfbs]
       tbl.snpsNearEnough$motifName <- motifNames
-      gr.eqtl <- GRanges(tbl.eqtl)
-      tbl.ov <- as.data.frame(findOverlaps(gr.eqtl, gr.tfbs))
-      colnames(tbl.ov) <- c("snp", "tfbs")
-      motifNames <- tbl.tfbs$motifName[tbl.ov$tfbs]
-      tbl.new <- tbl.eqtl[tbl.ov$snp, c("chrom", "start", "end", "rsid")]
-      tbl.new$motifName <- motifNames
-      tbl.snpsNearEnough <- rbind(tbl.snpsNearEnough, tbl.new)
+      #gr.eqtl <- GRanges(tbl.eqtl)
+      #tbl.ov <- as.data.frame(findOverlaps(gr.eqtl, gr.tfbs))
+      #colnames(tbl.ov) <- c("snp", "tfbs")
+      #motifNames <- tbl.tfbs$motifName[tbl.ov$tfbs]
+      #tbl.new <- tbl.eqtl[tbl.ov$snp, c("chrom", "start", "end", "rsid")]
+      #tbl.new$motifName <- motifNames
+      #tbl.snpsNearEnough <- rbind(tbl.snpsNearEnough, tbl.new)
       rownames(tbl.snpsNearEnough) <- NULL
       tbl.snpsNearEnough <- unique(tbl.snpsNearEnough)
       tbl.snpsNearEnough$name <- with(tbl.snpsNearEnough, paste(rsid, motifName, sep=":"))
@@ -477,17 +477,17 @@ removeTrack <- function(session, trackName)
 #----------------------------------------------------------------------------------------------------
 displayBindingSites <- function(session, target.tf)
 {
-   # browser()
    xyz <- "--- displayBindingSites, consult tbl.fimo..."
-   if(!target.tf %in% tbl.fimoHitsInEnhancers$tf){
-      printf("tf %s not found in tbl.fimoHitsInEnhancers", target.tf, state$currentModelName)
+   #browser()
+   if(!target.tf %in% tbl.fimo$tf){
+      printf("tf %s not found in tbl.fimo", target.tf, state$currentModelName)
       return()
       }
-   motif.pVal.threshold <- isolate(session$input$fimo.motif.significance)
-   tbl.tfbs <- subset(tbl.fimo, tf==target.tf & -log10(motif.pVal) >= motif.pVal.threshold)
-   tbl.tfbs <- tbl.tfbs[, c("chrom", "motifStart", "motifEnd", "motif.pVal")]
-   tbl.tfbs$score <- -log10(tbl.tfbs$motif.pVal)
-   tbl.tfbs <- tbl.tfbs[, c("chrom", "motifStart", "motifEnd", "score")]
+   #motif.pVal.threshold <- isolate(session$input$fimo.motif.significance)
+   tbl.tfbs <- subset(tbl.fimo, tf==target.tf) #  & -log10(motif.pVal) >= motif.pVal.threshold)
+   tbl.tfbs <- tbl.tfbs[, c("chrom", "motifStart", "motifEnd", "motif.pScore")]
+   #tbl.tfbs$score <- -log10(tbl.tfbs$motif.pVal)
+   tbl.tfbs <- tbl.tfbs[, c("chrom", "motifStart", "motifEnd", "motif.pScore")]
    temp.filename <- tempfile(tmpdir="tmp", fileext=".bed")
    write.table(tbl.tfbs, sep="\t", row.names=FALSE, col.names=FALSE, quote=FALSE, file=temp.filename)
    updateTabsetPanel(session, "trenaTabs", select="igvTab");
