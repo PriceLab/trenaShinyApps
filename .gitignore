@@ -76,6 +76,16 @@ tsnare1/dataPrep/mayo.rnaSeq.cer.and.tcx.matrices.RData
 tsnare1/dataPrep/tbl.enhancers.RData
 
 
+igap/inpp5d/dataPrep/motifbreakR.results.RData
+igap/inpp5d/shinyApp/data/mtx.withDimers.cer.ros.tcx.RData
+igap/inpp5d/shinyApp/data/tbl.breaks.RData
+igap/inpp5d/shinyApp/data/tbl.breaksBed.RData
+igap/inpp5d/shinyApp/data/tbl.enhancer.gwas.igap.snp.RData
+igap/inpp5d/shinyApp/data/tbl.enhancers.RData
+igap/inpp5d/shinyApp/data/tbl.gwas.igap.snp.RData
+igap/inpp5d/shinyApp/data/tbl.model.RData
+
+
 .RData
 /tmp/*
 .bed
