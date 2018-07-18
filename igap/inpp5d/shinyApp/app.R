@@ -37,12 +37,16 @@ currentPwmMatchThreshold <- 90
 state <- new.env(parent=emptyenv())
 state[["currentModel"]] <- models[[1]]
 state[["currentModelName"]] <- names(models)[1]
+
+selectedTableRow <- 0
+
 #state[["optionalTracks"]] <- c()
 #state[["currentGenomicRegion"]] <- ""
 #----------------------------------------------------------------------------------------------------
 ui <- fluidPage(
 
   includeScript("message-handler.js"),
+  tags$script(JS('setInterval(function(){console.log("keepAlive"); Shiny.setInputValue("foo", "var");}, 1 * 60 * 1000)')),
   tags$head(tags$link(rel = "stylesheet", type = "text/css",
                      href = "http://maxcdn.bootstrapcdn.com/font-awesome/4.2.0/css/font-awesome.min.css")
      ),
@@ -62,7 +66,6 @@ ui <- fluidPage(
         selectInput("addTrack", "Add Track:",
                    c(" - ",
                      "Enhancers"="enhancers",
-                     "DHS (wgEncodeClustered)"="dhs",
                      "IGAP GWAS SNPs"="snps",
                      "SNPs in Enhancers"="enhancer.snps",
                      "Motif-breaking SNPs"="breaking.snps"
@@ -73,12 +76,12 @@ ui <- fluidPage(
                     step=0.1,
                     min = 0,
                     max = 12),
-      # sliderInput("fimo.motif.significance", "FIMO motif score",
-      #              value = 2, #fivenum(-log10(tbl.bs$motif.pVal))[3],
-      #              step=0.1,
-      #              min = 0,
-      #              max = 12,
-      #              round=-2),
+      sliderInput("fimo.motif.significance", "FIMO motif score",
+                   value = 2, #fivenum(-log10(tbl.bs$motif.pVal))[3],
+                   step=0.1,
+                   min = 0,
+                   max = 12,
+                   round=-2),
       # sliderInput("fimo.snp.effect", "SNP binding affinity loss score",
       #              value = 0.5,
       #              step=0.1,
@@ -242,8 +245,9 @@ server <- function(input, output, session) {
    observeEvent(input$showSNPsNearBindingSitesButton, {
       shoulder <- isolate(input$snpShoulder)
       snpSignificanceThreshold <- isolate(session$input$IGAP.snp.significance)
-      #motifMatchThreshold <- isolate(session$input$fimo.motif.significance)
-      tbl.tfbs <- subset(tbl.fimo, motif.pScore >= snpSignificanceThreshold)
+      tbl.snpFiltered <- subset(tbl.snp, pScore >= snpSignificanceThreshold)
+      motifMatchThreshold <- isolate(session$input$fimo.motif.significance)
+      tbl.tfbs <- subset(tbl.fimo, motif.pScore >= motifMatchThreshold)
       tbl.tfbs <- tbl.tfbs[, c("chrom", "motifStart", "motifEnd", "motif.pVal", "motifName", "motif.pScore")]
       tbl.tfbs <- tbl.tfbs[, c("chrom", "motifStart", "motifEnd", "motif.pScore", "motifName")]
       colnames(tbl.tfbs) <- c("chrom", "start", "end", "score", "motifName")
@@ -288,6 +292,8 @@ server <- function(input, output, session) {
       if(trueRowClick){
          printf("about to get row_last_clicked");
          selectedTableRow <- input$geneModelTable_row_last_clicked
+         #browser()
+         printf(" selected rows: %d", input$geneModelTable_rows_selected)
          printf("selectedTableRow: %s", selectedTableRow)
          if(!is.null(selectedTableRow)){
             tbl.model <- state$currentModel
@@ -306,6 +312,11 @@ server <- function(input, output, session) {
                   }
                if(tfSelectionAction == "displayBindingSites"){
                   displayBindingSites(session, tf)
+                  printf("deselecting table rows")
+                  selectRows(dt.proxy, NULL)
+                  printf("after deselecting table rows");
+                  #browser()
+                  xyz <- 99
                   }
                } # if tf
             } # row not null
@@ -386,23 +397,43 @@ displayTrack <- function(session, trackName)
    x <- switch(trackName,
       enhancers       = {list(bed=tbl.enhancers,        name="INPP5D enhancers",   color="black")},
       dhs             = {list(bed=tbl.dhs,              name="DHS",                color="darkgray")},
-      snps            = {list(bed=tbl.snp,              name="GWAS snp",           color="darkRed")},
+      snps            = {list(bedgraph=tbl.snp,         name="GWAS snp",           color="darkRed")},
       enhancer.snps   = {list(bed=tbl.enhancer.snps,    name="Enhancer snp",       color="darkRed")},
       breaking.snps   = {list(bed=tbl.breaksBed,        name="Motif-breaking snp", color="maroon")}
       )
 
-    temp.filename <- tempfile(tmpdir="tmp", fileext=".bed")
-    printf("writing %d rows to %s", nrow(x$bed), temp.filename)
-    write.table(x$bed, sep="\t", row.names=FALSE, col.names=FALSE, quote=FALSE, file=temp.filename)
     updateTabsetPanel(session, "trenaTabs", select="igvTab");
-    later(function(){
-       session$sendCustomMessage(type="displayBedTrack",
-                                 message=(list(filename=temp.filename,
-                                               trackName=x$name,
-                                               displayMode="EXPANDED",
-                                               color=x$color,
-                                               trackHeight=40)))
-       }, 1)
+
+    if(trackName == "snps"){
+       temp.filename <- tempfile(tmpdir="tmp", fileext=".bed")
+       printf("writing %d rows to %s", nrow(x$bedGraph), temp.filename)
+       write.table(x$bedgraph[, c("chrom", "start", "end", "pScore")], sep="\t",
+                              row.names=FALSE, col.names=FALSE, quote=FALSE, file=temp.filename)
+       later(function(){
+          session$sendCustomMessage(type="displayBedGraphTrack",
+                                    message=(list(filename=temp.filename,
+                                                  trackName=x$name,
+                                                  displayMode="EXPANDED",
+                                                  color=x$color,
+                                                  minValue=0,
+                                                  maxValue=8,
+                                                  trackHeight=40)))
+          }, 1)
+        } # bedGraph for snps
+
+    if(trackName %in% c("enhancers", "dhs", "enhancer.snps", "breaking.snps")){
+       temp.filename <- tempfile(tmpdir="tmp", fileext=".bed")
+       printf("writing %d rows to %s", nrow(x$bed), temp.filename)
+       write.table(x$bed, sep="\t", row.names=FALSE, col.names=FALSE, quote=FALSE, file=temp.filename)
+       later(function(){
+                session$sendCustomMessage(type="displayBedTrack",
+                                          message=(list(filename=temp.filename,
+                                                        trackName=x$name,
+                                                        displayMode="EXPANDED",
+                                                        color=x$color,
+                                                        trackHeight=40)))
+             }, 1)
+       } # bed format track
 
 } # displayTrack
 #------------------------------------------------------------------------------------------------------------------------
@@ -483,10 +514,8 @@ displayBindingSites <- function(session, target.tf)
       printf("tf %s not found in tbl.fimo", target.tf, state$currentModelName)
       return()
       }
-   #motif.pVal.threshold <- isolate(session$input$fimo.motif.significance)
-   tbl.tfbs <- subset(tbl.fimo, tf==target.tf) #  & -log10(motif.pVal) >= motif.pVal.threshold)
-   tbl.tfbs <- tbl.tfbs[, c("chrom", "motifStart", "motifEnd", "motif.pScore")]
-   #tbl.tfbs$score <- -log10(tbl.tfbs$motif.pVal)
+   motif.pVal.threshold <- isolate(session$input$fimo.motif.significance)
+   tbl.tfbs <- subset(tbl.fimo, tf==target.tf & -log10(motif.pVal) >= motif.pVal.threshold)
    tbl.tfbs <- tbl.tfbs[, c("chrom", "motifStart", "motifEnd", "motif.pScore")]
    temp.filename <- tempfile(tmpdir="tmp", fileext=".bed")
    write.table(tbl.tfbs, sep="\t", row.names=FALSE, col.names=FALSE, quote=FALSE, file=temp.filename)
