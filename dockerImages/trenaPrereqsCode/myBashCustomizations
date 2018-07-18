@@ -1,5 +1,0 @@
-export PS1='DOCKER:trena.\W> '
-alias dir='ls -lap'
-alias ddir='ls -lap | grep ^d'
-
-

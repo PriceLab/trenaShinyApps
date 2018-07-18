@@ -54,6 +54,7 @@ state[["currentGenomicRegion"]] <- ""
 ui <- fluidPage(
 
   includeScript("message-handler.js"),
+  tags$script(JS('setInterval(function(){console.log("keepAlive"); Shiny.setInputValue("foo", "var");}, 1 * 60 * 1000)')),
   tags$head(tags$link(rel = "stylesheet", type = "text/css",
                      href = "http://maxcdn.bootstrapcdn.com/font-awesome/4.2.0/css/font-awesome.min.css")
      ),

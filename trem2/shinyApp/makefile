@@ -11,4 +11,6 @@ build:
 bash:
 	docker run -ti --rm -p 60040:3838 trem2shinyapp bash
 
+dockerRun:
+	docker run -p 60041:3838 trem2shinyapp
 
