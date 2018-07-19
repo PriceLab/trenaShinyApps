@@ -5,7 +5,6 @@ library(htmlwidgets)
 library(GenomicRanges)
 library(later)
 library(MotifDb)
-library(motifStack)
 library(RUnit)
 #----------------------------------------------------------------------------------------------------
 targetGene <- "INPP5D"
@@ -568,5 +567,12 @@ plotTfTargetGeneCorrelation <- function(session, tf, expression.matrix.id)
 
 } # plotTfTargetGeneCorrelation
 #------------------------------------------------------------------------------------------------------------------------
-#Sys.sleep(3)
-#shinyApp(ui, server)
+shinyOptions <- list()
+
+if(Sys.info()[["nodename"]] == "trena.systemsbiology.net"){
+   port <- 60031
+   printf("running on trena, using port %d", port)
+   shinyOptions <- list(host="0.0.0.0", port=port, launch.browser=FALSE)
+   }
+app <- shinyApp(ui=ui,server=server, options=shinyOptions)
+
