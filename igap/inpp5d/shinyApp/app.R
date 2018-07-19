@@ -12,7 +12,13 @@ targetGene <- "INPP5D"
 load("data/tbl.model.RData")                      # "tbl.model"
 load("data/mtx.withDimers.cer.ros.tcx.RData")     # "mtx.cer" "mtx.ros" "mtx.tcx"
 load("data/tbl.enhancers.RData")                  # "tbl.enhancers"
+
+loc.min <- min(tbl.enhancers$start) - 2000
+loc.max <-  max(tbl.enhancers$end) + 2000
+chromosome <- tbl.enhancers$chr[1]
+
 load("data/tbl.gwas.igap.snp.RData")              # "tbl.snp"
+tbl.snp <- subset(tbl.snp, chrom==chromosome & start >= loc.min & end <= loc.max)
 load("data/tbl.enhancer.gwas.igap.snp.RData")     # "tbl.enhancer.snps"
 load("data/tbl.breaks.RData")                     # "tbl.breaks"
 load("data/tbl.breaksBed.RData")                  # "tbl.breaksBed"
@@ -57,8 +63,8 @@ ui <- fluidPage(
      sidebarPanel(
         width=3,
         selectInput("displayGenomicRegion", "Display Genomic Region:",
-                    c("INPP5D +/- 40kb" = "tssPlusMinus40kb",
-                      "All INPP5D enhancers" = "enhancers",
+                    c("All INPP5D enhancers" = "enhancers",
+                      "INPP5D +/- 40kb" = "tssPlusMinus40kb",
                       "TSS-proximal interesting snps"="interestingSnpsNearTSS")),
 
         #selectInput("geneModel", "Choose model:", models),
@@ -71,34 +77,34 @@ ui <- fluidPage(
                      "Motif-breaking SNPs"="breaking.snps"
                      )),
 
-       sliderInput("IGAP.snp.significance", "SNP score",
+        sliderInput("IGAP.snp.significance", "SNP score",
                     value = 4,
                     step=0.1,
                     min = 0,
                     max = 12),
-      sliderInput("fimo.motif.significance", "FIMO motif score",
-                   value = 2, #fivenum(-log10(tbl.bs$motif.pVal))[3],
-                   step=0.1,
-                   min = 0,
-                   max = 12,
-                   round=-2),
-      # sliderInput("fimo.snp.effect", "SNP binding affinity loss score",
-      #              value = 0.5,
-      #              step=0.1,
-      #              min = 0,
-      #              max = 12),
-      # actionButton("findDisruptiveSNPsButton", "SNPs which disrupt TF binding sites"),
-      # HTML("<br><br><br>"),
-       sliderInput("snpShoulder", "Proximity",
-                   value = 10,
-                   min = 0,
-                   max = 100),
-       actionButton("showSNPsNearBindingSitesButton", "SNPs near binding sites in enhancer regions")
-       ),
+        sliderInput("fimo.motif.significance", "FIMO motif score",
+                    value = 2, #fivenum(-log10(tbl.bs$motif.pVal))[3],
+                    step=0.1,
+                    min = 0,
+                    max = 12,
+                    round=-2),
+        # sliderInput("fimo.snp.effect", "SNP binding affinity loss score",
+        #              value = 0.5,
+        #              step=0.1,
+        #              min = 0,
+        #              max = 12),
+        # actionButton("findDisruptiveSNPsButton", "SNPs which disrupt TF binding sites"),
+        # HTML("<br><br><br>"),
+        sliderInput("snpShoulder", "Proximity",
+                    value = 10,
+                    min = 0,
+                    max = 100),
+        actionButton("showSNPsNearBindingSitesButton", "SNPs near binding sites in enhancer regions")
+     ),
 
      mainPanel(
-       tabsetPanel(type="tabs",
-                   id="trenaTabs",
+        tabsetPanel(type="tabs",
+                    id="trenaTabs",
                    tabPanel(title="IGV",             value="igvTab",          igvShinyOutput('igvShiny')),
                    tabPanel(title="READ ME",         includeHTML("readme.html")),
                    tabPanel(title="trena model",     value="geneModelTab",
@@ -179,7 +185,7 @@ server <- function(input, output, session) {
       regionName <- input$displayGenomicRegion
       #printf("display event: %s", regionName)
       state$currentGenomicRegion <- regionName
-      regions <- list(enhancers="chr2:232850784-233432949",
+      regions <- list(enhancers="chr2:232850784-233,458,236",
                       tssPlusMinus40kb="chr2:233,058,937-233,248,903",
                       interestingSnpsNearTSS="chr2:233,092,624-233,095,615"
                       )
@@ -286,42 +292,61 @@ server <- function(input, output, session) {
          }, 1)
       })
 
-   observeEvent(input$geneModelTable_cell_clicked, {
-      trueRowClick <- length(input$geneModelTable_cell_clicked) > 0
-      printf("--- input$geneModelTable_cell_clicked: %s", trueRowClick)
-      if(trueRowClick){
-         printf("about to get row_last_clicked");
-         selectedTableRow <- input$geneModelTable_row_last_clicked
-         #browser()
-         printf(" selected rows: %d", input$geneModelTable_rows_selected)
-         printf("selectedTableRow: %s", selectedTableRow)
-         if(!is.null(selectedTableRow)){
-            tbl.model <- state$currentModel
-            tf <- tbl.model$tf.hgnc[selectedTableRow]
-            later(function(){selectRows(dt.proxy, NULL)}, 0.01);
-            if(length(tf) > 0){
-               #browser()
-               tfSelectionAction <- isolate(input$tfSelectionChoice)
-               printf("table row clicked: %s  - actionRequested: %s", tf, tfSelectionAction);
-               if(tfSelectionAction == "xyPlot"){
-                  updateTabsetPanel(session, "trenaTabs", select="plotTab");
-                  #tokens <- strsplit(state$currentModelName, "\\.")[[1]]
-                  #expression.matrix.id <- tokens[length(tokens)]
-                  expression.matrix.id <- "tcx"
-                  output$xyPlot = renderPlot(plotTfTargetGeneCorrelation(session, tf, expression.matrix.id))
-                  }
-               if(tfSelectionAction == "displayBindingSites"){
-                  displayBindingSites(session, tf)
-                  printf("deselecting table rows")
-                  selectRows(dt.proxy, NULL)
-                  printf("after deselecting table rows");
-                  #browser()
-                  xyz <- 99
-                  }
-               } # if tf
-            } # row not null
-         } # if trueRowClick
-      }) # geneModelTable_cell_clicked
+   observeEvent(input$geneModelTable_rows_selected, {
+         selectedTableRow <- isolate(input$geneModelTable_rows_selected)
+         tbl.model <- state$currentModel
+         tf <- tbl.model$tf.hgnc[selectedTableRow]
+         printf("%d %s", selectedTableRow, tf)
+         tfSelectionAction <- isolate(input$tfSelectionChoice)
+         printf("table row clicked: %s  - actionRequested: %s", tf, tfSelectionAction);
+         if(tfSelectionAction == "xyPlot"){
+            updateTabsetPanel(session, "trenaTabs", select="plotTab");
+            #tokens <- strsplit(state$currentModelName, "\\.")[[1]]
+            #expression.matrix.id <- tokens[length(tokens)]
+            expression.matrix.id <- "tcx"
+            output$xyPlot = renderPlot(plotTfTargetGeneCorrelation(session, tf, expression.matrix.id))
+             }
+         if(tfSelectionAction == "displayBindingSites"){
+            displayBindingSites(session, tf)
+            }
+         }) # observe row selection event
+
+#   observeEvent(input$geneModelTable_cell_clicked, {
+#      trueRowClick <- length(input$geneModelTable_cell_clicked) > 0
+#      printf("--- input$geneModelTable_cell_clicked: %s", trueRowClick)
+#      if(trueRowClick){
+#         printf("about to get row_last_clicked");
+#         selectedTableRow <- input$geneModelTable_row_last_clicked
+#         #browser()
+#         printf(" selected rows: %d", input$geneModelTable_rows_selected)
+#         printf("selectedTableRow: %s", selectedTableRow)
+#         if(!is.null(selectedTableRow)){
+#            tbl.model <- state$currentModel
+#            tf <- tbl.model$tf.hgnc[selectedTableRow]
+#            #later(function(){selectRows(dt.proxy, NULL)}, 0.01);
+#            if(length(tf) > 0){
+#               #browser()
+#               tfSelectionAction <- isolate(input$tfSelectionChoice)
+#               printf("table row clicked: %s  - actionRequested: %s", tf, tfSelectionAction);
+#               if(tfSelectionAction == "xyPlot"){
+#                  updateTabsetPanel(session, "trenaTabs", select="plotTab");
+#                  #tokens <- strsplit(state$currentModelName, "\\.")[[1]]
+#                  #expression.matrix.id <- tokens[length(tokens)]
+#                  expression.matrix.id <- "tcx"
+#                  output$xyPlot = renderPlot(plotTfTargetGeneCorrelation(session, tf, expression.matrix.id))
+#                  }
+#               if(tfSelectionAction == "displayBindingSites"){
+#                  displayBindingSites(session, tf)
+#                  printf("deselecting table rows")
+#                  #selectRows(dt.proxy, NULL)
+#                  printf("after deselecting table rows");
+#                  #browser()
+#                  xyz <- 99
+#                  }
+#               } # if tf
+#            } # row not null
+#         } # if trueRowClick
+#      }) # geneModelTable_cell_clicked
 
    #output$xyPlot = renderPlot(
    #    {print(" ---- renderPlot");
@@ -406,7 +431,7 @@ displayTrack <- function(session, trackName)
 
     if(trackName == "snps"){
        temp.filename <- tempfile(tmpdir="tmp", fileext=".bed")
-       printf("writing %d rows to %s", nrow(x$bedGraph), temp.filename)
+       printf("writing %d rows to %s", nrow(x$bedgraph), temp.filename)
        write.table(x$bedgraph[, c("chrom", "start", "end", "pScore")], sep="\t",
                               row.names=FALSE, col.names=FALSE, quote=FALSE, file=temp.filename)
        later(function(){

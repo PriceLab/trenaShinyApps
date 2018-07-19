@@ -99,8 +99,7 @@ run <- function()
    tbl.fimo$stop <-  tbl.fimo$stop + tbl.regionMax$start
    tbl.fimo$pScore <- -log10(tbl.fimo$p.value)
    dim(tbl.fimo)
-   dim(subset(tbl.fimo, pScore >= 3))
-   tbl.fimo <- subset(tbl.fimo, pScore >= 3)
+   dim(subset(tbl.fimo, pScore >= -log10(0.01)))
    tbl.fimo$chrom <- chromosome
 
    tfs <- as.character(pfm.map[tbl.fimo$motif])
@@ -138,4 +137,20 @@ run <- function()
       } # for current.tf
 
 } # run
+#------------------------------------------------------------------------------------------------------------------------
+# chr2:233,132,931-233,133,659
+# nfatc2 motif breaking snp rs10933435
+# intersects a FLI1 binding site, and an overlapping somewhat larger (upstream) SPI1 site as well
+# but no binding site for nfatc2 shows up.
+corysBug <- function()
+{
+
+   snp.loc <- 233133436
+   subset(tbl.fimo, motifStart <= snp.loc & motifEnd >= snp.loc)
+   tbl.x <- subset(tbl.fimo, start <= snp.loc & stop >= snp.loc)
+
+   # nfatc2 has pScore of 2.89, just missed being included in tbl.fimo used by the shinyapp.
+   # remedy:  add slider on pScore, be more inclusive in the delivered tbl.fimo
+
+} # corysBug
 #------------------------------------------------------------------------------------------------------------------------
