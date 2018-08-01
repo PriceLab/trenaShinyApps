@@ -12,5 +12,5 @@ bash:
 	docker run -ti --rm -p 60040:3838 inpp5dshinyapp bash
 
 dockerRun:
-	docker run -p 60041:3838 inpp5dshinyapp
+	docker run -p 60042:3838 inpp5dshinyapp
 
