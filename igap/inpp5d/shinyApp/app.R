@@ -333,7 +333,7 @@ server <- function(input, output, session) {
     options=list(pageLength=25, dom="t"))
 
    output$igvShiny <- renderIgvShiny({
-     igvShiny("hello shinyApp")
+     igvShiny(list(roi="chr2:233,027,632-233,264,596"))
      })
 
   } # server
