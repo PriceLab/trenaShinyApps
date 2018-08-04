@@ -103,6 +103,28 @@ igap/inpp5d/shinyApp/png/rs6437088.png
 igap/inpp5d/shinyApp/png
 igap/inpp5d/shinyApp/tmp/*.bed
 
+mentewab/frd3/old
+mentewab/frd3/FRD3.data
+mentewab/frd3/FRD3.data/inst/dataPrep/tbls.frd3.dhs.budAndLeaf.RData
+mentewab/frd3/FRD3.data/inst/extdata/mtx.zinc.22810x42.RData
+mentewab/frd3/FRD3.data/inst/extdata/tbl.motifs.jaspar2018.athaliana.Chr3.2566277.2572151.ge85.RData
+mentewab/frd3/FRD3.data/inst/extdata/tbl.xref.RData
+mentewab/frd3/FRD3.data/inst/extdata/tbls.frd3.dhs.budAndLeaf.RData
+mentewab/frd3/FRD3.data/inst/unitTests/tbl.motifs.jaspar2018.athaliana.Chr3.2566277.2572151.ge85.RData
+mentewab/frd3/FRD3.data/inst/unitTests/tbl.motifs.jaspar2018.athaliana.Chr3.2566277.2572151.RData
+mentewab/frd3/old/FRD3.data/inst/dataPrep/tbls.frd3.dhs.budAndLeaf.RData
+mentewab/frd3/old/FRD3.data/inst/extdata/mtx.zinc.22810x42.RData
+mentewab/frd3/old/FRD3.data/inst/extdata/tbl.motifs.jaspar2018.athaliana.Chr3.2566277.2572151.ge85.RData
+mentewab/frd3/old/FRD3.data/inst/extdata/tbl.xref.RData
+mentewab/frd3/old/FRD3.data/inst/extdata/tbls.frd3.dhs.budAndLeaf.RData
+mentewab/frd3/old/FRD3.data/inst/unitTests/tbl.motifs.jaspar2018.athaliana.Chr3.2566277.2572151.ge85.RData
+mentewab/frd3/old/FRD3.data/inst/unitTests/tbl.motifs.jaspar2018.athaliana.Chr3.2566277.2572151.RData
+mentewab/frd3/shinyApp/data/mtx.zinc.22810x42.RData
+mentewab/frd3/shinyApp/data/tbl.motifs.jaspar2018.athaliana.Chr3.2566277.2572151.ge85.RData
+mentewab/frd3/shinyApp/data/tbl.xref.RData
+mentewab/frd3/shinyApp/data/tbls.frd3.dhs.budAndLeaf.RData
+
+
 
 
 .RData
