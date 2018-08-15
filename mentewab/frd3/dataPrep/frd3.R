@@ -6,7 +6,11 @@ library(MotifDb)
 library(FimoClient)
 library(RUnit)
 genomeName <- "BSgenome.Athaliana.TAIR.TAIR9"
-library(BSgenome.Athaliana.TAIR.TAIR9)
+library(genomeName, character.only=TRUE)
+#------------------------------------------------------------------------------------------------------------------------
+source("../../../utils/roundNumericColumnsInDataframe.R")
+#------------------------------------------------------------------------------------------------------------------------
+load("data/tbls.frd3.dhs.budAndLeaf.RData")   # "tbl.frd3buds" "tbl.frd3leaf"
 #------------------------------------------------------------------------------------------------------------------------
 geneSymbol <- "FRD3"
 orf <- "AT3G08040"
@@ -78,13 +82,26 @@ if(!exists("tbl.model")) {
    tbl.model <- run(solver)
    tbl.model <- tbl.model[order(tbl.model$rfScore, decreasing=TRUE),]
    tbl.model$symbol <- tbl.xref[match(tbl.model$gene, tbl.xref$orfs), "geneSymbol"]
+   tbl.model <- tbl.model[order(tbl.model$pcaMax, decreasing=TRUE),]
+   tbl.model <- roundNumericColumnsInDataframe(tbl.model, 3, "lassoPValue")
+   tbl.model <- subset(tbl.model, abs(pearsonCoeff) > 0.4)
+   save(tbl.model, file="../shinyApp/data/tbl.model.frd3-transcript2.RData")
+
    }  # tbl.model
 
 if(!exists("tbl.bindingSites")){
-   tbl.bindingSites <- subset(tbl.bed, motif %in% tbl.xref[match(tbl.model$gene, tbl.xref$orfs), "motif"])
-   track <- DataFrameAnnotationTrack("model.bs", tbl.bindingSites, color="red")
-   displayTrack(igv, track)
+   tbl.bindingSites <- unique(subset(tbl.bed, motif %in% tbl.xref[match(tbl.model$gene, tbl.xref$orfs), "motif"]))
+   geneSymbols <- tbl.xref$geneSymbol[match(tbl.bindingSites$motif, tbl.xref$motif)]
+   tbl.bindingSites$geneSymbol <- geneSymbols
+   tfs.unique <- sort(unique(tbl.bindingSites$geneSymbol))
+   for(tf in tfs.unique){
+      tbl.tfbs <- subset(tbl.bindingSites, geneSymbol==tf)
+      track <- DataFrameAnnotationTrack(tf, tbl.tfbs, color="red", trackHeight=25)
+      displayTrack(igv, track)
+      } # for tf
+   save(tbl.bindingSites, file="../shinyApp/data/tbl.bindingSites.frd3-transcript2.RData")
    } # tbl.bindingSites
+
 
 
 #------------------------------------------------------------------------------------------------------------------------
