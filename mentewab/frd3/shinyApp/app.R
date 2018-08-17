@@ -11,6 +11,8 @@ library(RColorBrewer)
 totalColorCount <- 12
 colors <- brewer.pal(totalColorCount, "Paired")
 colorNumber <- 0
+state <- new.env(parent=emptyenv())
+state$currentModel <- NULL
 #----------------------------------------------------------------------------------------------------
 load("data/tbls.frd3.dhs.budAndLeaf.RData")   # "tbl.frd3buds" "tbl.frd3leaf"
 tbl.buds <- tbl.frd3buds
@@ -28,6 +30,8 @@ load("data/tbl.bindingSites.frd3-transcript2.RData") #  "tbl.bindingSites.2
 #----------------------------------------------------------------------------------------------------
 load("data/tbl.model.frd3-transcript1.RData")  # tbl.model.1
 load("data/tbl.model.frd3-transcript2.RData")  # tbl.model.2
+#----------------------------------------------------------------------------------------------------
+load("data/mtx.zinc.22810x42.RData")           # mtx
 #----------------------------------------------------------------------------------------------------
 geneSymbol <- "FRD3"
 orf <- "AT3G08040"
@@ -66,8 +70,11 @@ ui <- fluidPage(
         selectInput("addBindingSites", "Add TF binding sites for regulatory model:",
                    c(" - ",
                      "transcript 1"="transcript.1.model",
-                     "transcript 2"="transcript.2.model"
-                     ))
+                     "transcript 2"="transcript.2.model",
+                     "1 & 2"="both.transcript.models"
+                     )),
+
+        actionButton("removeOptionalTracks", "Remove tracks")
 
        ),  # sidebarPanel
 
@@ -76,10 +83,7 @@ ui <- fluidPage(
                     id="trenaTabs",
                     tabPanel(title="IGV",             value="igvTab",          igvShinyOutput('igvShiny')),
                     tabPanel(title="trena model",     value="geneModelTab",
-                             mainPanel(radioButtons("tfSelectionChoice", "Row (transcription factor) selection will display:",
-                                                    c("XY plot" = "xyPlot",
-                                                      "Binding sites" = "displayBindingSites"),
-                                                    inline=TRUE),
+                             mainPanel(h5("Row (transcription factor) selection will display gene expression scatter plot."),
                                        DTOutput("geneModelTable")
                                       )),
                     tabPanel(title="TF/FRD3 xy plot",  value="plotTab", plotOutput("xyPlot", height=800))
@@ -95,7 +99,7 @@ server <- function(input, output, session) {
 
    observeEvent(input$displayGenomicRegion, {
       regionName <- input$displayGenomicRegion
-      regions <- list(fullgene="3:2,565,078-2,572,981",
+      regions <- list(fullgene="3:2,561,517-2,577,324",
                       transcript.1.promoter=sprintf("%s:%d-%d", chromosome, tss.orf.1-499, tss.orf.1+2000),
                       transcript.2.promoter=sprintf("%s:%d-%d", chromosome, tss.orf.2-499, tss.orf.2+2000)
                       )
@@ -125,8 +129,12 @@ server <- function(input, output, session) {
    observeEvent(input$addBindingSites, ignoreInit= TRUE, {
       modelName <- input$addBindingSites;
       printf("addBindingSites: %s", modelName);
-      tbl.bs <- switch(modelName, "transcript.1.model" = tbl.bindingSites.1, "transcript.2.model" = tbl.bindingSites.2)
-      transcript.number <- switch(modelName, "transcript.1.model" = 1, "transcript.2.model" = 2)
+      tbl.bs <- switch(modelName, "transcript.1.model" = tbl.bindingSites.1,
+                                  "transcript.2.model" = tbl.bindingSites.2,
+                                  "both.transcript.models" = rbind(tbl.bindingSites.1, tbl.bindingSites.2))
+      transcript.number <- switch(modelName, "transcript.1.model" = ".1",
+                                             "transcript.2.model" = ".2",
+                                             "both.transcript.models" = "")
       tbl.bs <- tbl.bs[, c("chrom", "start", "stop", "score", "motif", "geneSymbol")]
       colnames(tbl.bs) <- c("chr", "start", "end", "value", "sampleID", "geneSymbol")
       printf("loadingBedGraphTrack, dim: %d %d", nrow(tbl.bs), ncol(tbl.bs))
@@ -137,8 +145,9 @@ server <- function(input, output, session) {
          for(tf in tfs){
             colorNumber <<- (colorNumber + 1) %% totalColorCount
             tbl.bs.sub <- subset(tbl.bs, geneSymbol==tf)
-            track.name <- sprintf("%s.%d", tf, transcript.number)
-            loadBedTrack(session, track.name, tbl.bs.sub, color=colors[colorNumber], trackHeight=25)
+            printf("new tf '%s', %d rows", tf, nrow(tbl.bs.sub))
+            track.name <- sprintf("%s%s", tf, transcript.number)
+            loadBedGraphTrack(session, track.name, tbl.bs.sub, color=colors[colorNumber], trackHeight=30)
             } # for tf
          }
         # myFunc <- function() loadBedGraphTrack(session, modelName, tbl.bs, color=colors[colorNumber], trackHeight=30)
@@ -162,12 +171,18 @@ server <- function(input, output, session) {
          }
       })
 
+   observeEvent(input$removeOptionalTracks, ignoreInit = TRUE, {
+      removeUserAddedTracks(session)
+      })
+
+
    output$geneModelTable <- renderDT({
       model.name <- input$geneModel;
       if(model.name != "no.model"){
          printf("    rendering DT, presumably because input$geneModel changes, model.name: %s", model.name);
          selection="single"
          tbl.model <- switch(model.name, "transcript.1.model"=tbl.model.1, "transcript.2.model"=tbl.model.2)
+         state$currentModel <- tbl.model
          printf("data.frame dimensions: %d, %d", nrow(tbl.model), ncol(tbl.model))
          if(nrow(tbl.model) > 10)
             tbl.model <- tbl.model[1:10,]
@@ -180,8 +195,33 @@ server <- function(input, output, session) {
      options=list(pageLength=25, dom="t")
      ) # renderDT
 
-  } # server
+   observeEvent(input$geneModelTable_cell_clicked, {
+      trueRowClick <- length(input$geneModelTable_cell_clicked) > 0
+      printf("--- input$geneModelTable_cell_clicked: %s", trueRowClick)
+      if(trueRowClick){
+         selectedTableRow <- input$geneModelTable_row_last_clicked
+         if(!is.null(selectedTableRow)){
+            tbl.model <- state$currentModel
+            tf <- tbl.model$gene[selectedTableRow]
+            printf("selected tf to plot: %s", tf)
+            later(function(){selectRows(dt.proxy, NULL)}, 0.01);
+            if(length(tf) > 0){
+               updateTabsetPanel(session, "trenaTabs", select="plotTab");
+               output$xyPlot = renderPlot(plotTfTargetGeneCorrelation(session, tf))
+               } # if tf
+            } # row not null
+         } # if trueRowClick
+      }) # geneModelTable_cell_clicked
 
+} # server
+#----------------------------------------------------------------------------------------------------
+plotTfTargetGeneCorrelation <- function(session, tf, expression.matrix.id)
+{
+   printf("want an xyplot of %s vs. FRD3 (%s)", tf, orf)
+   plot(mtx[tf, ], mtx[orf, ],main="Gene Expression",
+        xlab=tf, ylab=orf, col="red", pch=19) # , xlim=c(0,5), ylim=c(0,5))
+
+} # plotTfTargetGeneCorrelation
 #----------------------------------------------------------------------------------------------------
 shinyOptions <- list()
 

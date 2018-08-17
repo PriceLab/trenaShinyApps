@@ -73,8 +73,15 @@ if(!exists("candidate.tfs.1")){
    tbl.xtab <- as.data.frame(table(tbl.fimo$motif))
    fivenum(tbl.xtab$Freq)
    candidate.motifs <- unique(tbl.fimo$motif)
+   length(candidate.motifs) # 373
    tfs.1 <- as.data.frame(mcols(MotifDb[candidate.motifs]))$geneSymbol
-   tfs.orfs <- tbl.xref$orfs[match(tfs.1, tbl.xref$geneSymbol)]
+   tfs.orfs.1 <- tbl.xref$orfs[match(tfs.1, tbl.xref$geneSymbol)]
+   tfs.orfs.2 <- tbl.xref$orfs[match(tfs.1, tbl.xref$SYMBOL)]
+   length(tfs.orfs.1)
+   length(which(is.na(tfs.orfs.1)))
+   length(tfs.orfs.2)
+   length(which(is.na(tfs.orfs.2)))
+   tfs.orfs <- unique(c(tfs.orfs.1, tfs.orfs.2))
    deleters <- which(is.na(tfs.orfs))
    printf("%d/%d tf.orfs are NA", length(deleters), length(tfs.orfs))
    if(length(deleters) > 0)
@@ -112,13 +119,16 @@ if(!exists("candidate.tfs.2")){
    } # tfs
 
 if(!exists("tbl.model.1")) {
+   length(intersect(candidate.tfs.1, rownames(mtx))) # 294
    solver <- EnsembleSolver(mtx, targetGene, candidate.tfs.1)
    tbl.model <- run(solver)
-   tbl.model <- tbl.model[order(tbl.model$rfScore, decreasing=TRUE),]
-   tbl.model$symbol <- tbl.xref[match(tbl.model$gene, tbl.xref$orfs), "geneSymbol"]
+   tbl.model$geneSymbol <- tbl.xref[match(tbl.model$gene, tbl.xref$orfs), "geneSymbol"]
+   tbl.model$SYMBOL <- tbl.xref[match(tbl.model$gene, tbl.xref$orfs), "SYMBOL"]
    tbl.model <- tbl.model[order(tbl.model$pcaMax, decreasing=TRUE),]
    tbl.model <- roundNumericColumnsInDataframe(tbl.model, 3, "lassoPValue")
    tbl.model <- subset(tbl.model, abs(pearsonCoeff) > 0.4)
+   if(nrow(tbl.model) > 10)
+      tbl.model <- tbl.model[1:10,]
    tbl.model.1 <- tbl.model
    save(tbl.model.1, file="../shinyApp/data/tbl.model.frd3-transcript1.RData")
    }  # tbl.model
@@ -126,32 +136,34 @@ if(!exists("tbl.model.1")) {
 if(!exists("tbl.model.2")) {
    solver <- EnsembleSolver(mtx, targetGene, candidate.tfs.2)
    tbl.model <- run(solver)
-   tbl.model <- tbl.model[order(tbl.model$rfScore, decreasing=TRUE),]
    tbl.model$symbol <- tbl.xref[match(tbl.model$gene, tbl.xref$orfs), "geneSymbol"]
    tbl.model <- tbl.model[order(tbl.model$pcaMax, decreasing=TRUE),]
    tbl.model <- roundNumericColumnsInDataframe(tbl.model, 3, "lassoPValue")
    tbl.model <- subset(tbl.model, abs(pearsonCoeff) > 0.4)
+   if(nrow(tbl.model) > 10)
+      tbl.model <- tbl.model[1:10,]
    tbl.model.2 <- tbl.model
    save(tbl.model.2, file="../shinyApp/data/tbl.model.frd3-transcript2.RData")
    }  # tbl.model
 
-if(!exists("tbl.bindingSites.1")){
-   tbl.bindingSites.1 <- unique(subset(tbl.bed.1, motif %in% tbl.xref[match(tbl.model$gene, tbl.xref$orfs), "motif"]))
-   geneSymbols <- tbl.xref$geneSymbol[match(tbl.bindingSites.1$motif, tbl.xref$motif)]
-   tbl.bindingSites.1$geneSymbol <- geneSymbols
-   tfs.unique <- sort(unique(tbl.bindingSites.1$geneSymbol))
-   for(tf in tfs.unique){
-      tbl.tfbs <- subset(tbl.bindingSites.1, geneSymbol==tf)
-      track <- DataFrameAnnotationTrack(tf, tbl.tfbs, color="red", trackHeight=25)
-      displayTrack(igv, track)
-      } # for tf
-   save(tbl.bindingSites.1, file="../shinyApp/data/tbl.bindingSites.1.frd3-transcript2.RData")
-   } # tbl.bindingSites.1
+add.orfs.geneSymbol.to.fimoResults <- function(tbl.bed){
+   motifs <- tbl.bed$motif
+   motifDB.geneSymbols <- unlist(lapply(motifs, function(motif) mcols(MotifDb[motif])$geneSymbol))
+   length(motifs)
+   length(motifDB.geneSymbols)
+   length(which(is.na(motifDB.geneSymbols)))
+   xref.indices <- match(motifDB.geneSymbols, tbl.xref$geneSymbol)
+   orfs <- tbl.xref$orfs[xref.indices]
+   geneSymbols <- tbl.xref$geneSymbol[xref.indices]
+   tbl.bed$orf <- orfs
+   tbl.bed$geneSymbol <- geneSymbols
+   tbl.bed
+   }
 
 if(!exists("tbl.bindingSites.1")){
-   tbl.bindingSites.1 <- unique(subset(tbl.bed.1, motif %in% tbl.xref[match(tbl.model$gene, tbl.xref$orfs), "motif"]))
-   geneSymbols <- tbl.xref$geneSymbol[match(tbl.bindingSites.1$motif, tbl.xref$motif)]
-   tbl.bindingSites.1$geneSymbol <- geneSymbols
+   tbl.bindingSites.1 <- add.orfs.geneSymbol.to.fimoResults(tbl.bed.1)
+   tbl.bindingSites.1 <-  subset(tbl.bindingSites.1, orf %in% tbl.model.1$gene)
+   dim(tbl.bindingSites.1)
    tfs.unique <- sort(unique(tbl.bindingSites.1$geneSymbol))
    for(tf in tfs.unique){
       tbl.tfbs <- subset(tbl.bindingSites.1, geneSymbol==tf)
@@ -161,10 +173,11 @@ if(!exists("tbl.bindingSites.1")){
    save(tbl.bindingSites.1, file="../shinyApp/data/tbl.bindingSites.frd3-transcript1.RData")
    } # tbl.bindingSites.1
 
+
 if(!exists("tbl.bindingSites.2")){
-   tbl.bindingSites.2 <- unique(subset(tbl.bed.2, motif %in% tbl.xref[match(tbl.model$gene, tbl.xref$orfs), "motif"]))
-   geneSymbols <- tbl.xref$geneSymbol[match(tbl.bindingSites.2$motif, tbl.xref$motif)]
-   tbl.bindingSites.2$geneSymbol <- geneSymbols
+   tbl.bindingSites.2 <- add.orfs.geneSymbol.to.fimoResults(tbl.bed.2)
+   tbl.bindingSites.2 <-  subset(tbl.bindingSites.2, orf %in% tbl.model.2$gene)
+   dim(tbl.bindingSites.2)
    tfs.unique <- sort(unique(tbl.bindingSites.2$geneSymbol))
    for(tf in tfs.unique){
       tbl.tfbs <- subset(tbl.bindingSites.2, geneSymbol==tf)
