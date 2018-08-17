@@ -9,8 +9,8 @@ build:
 	docker build -t frd3shinyapp -f Dockerfile .
 
 bash:
-	docker run -ti --rm -p 60040:3838 frd3shinyapp bash
+	docker run -ti --rm -p 60039:3838 frd3shinyapp bash
 
 dockerRun:
-	docker run -p 60042:3838 frd3shinyapp
+	docker run -p 60039:3838 frd3shinyapp
 
