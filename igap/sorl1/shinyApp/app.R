@@ -40,11 +40,12 @@ genomic.roi <- list(genePlusMinus10kb=gene.region,
 
 currentShoulder <- 0
 currentPwmMatchThreshold <- 90
-
+#----------------------------------------------------------------------------------------------------
 state <- new.env(parent=emptyenv())
+state[["activeRegions"]] <- c("all.dna")
 state[["currentModel"]] <- tbl.model
 #state[["currentModelName"]] <- names(models)[1]
-
+#----------------------------------------------------------------------------------------------------
 selectedTableRow <- 0
 
 #state[["optionalTracks"]] <- c()
@@ -198,6 +199,23 @@ server <- function(input, output, session) {
       updateTabsetPanel(session, "trenaTabs", select="geneModelTab");
       })
 
+
+   observeEvent(input$specifyActiveRegions, ignoreInit=TRUE, {
+      printf("--- specifyActiveRegions event")
+      regionNames <- isolate(input$specifyActiveRegions)
+      printf("    regionNames: %s", paste(regionNames, collapse=", "))
+      new.region <- setdiff(regionNames, state$activeRegions)
+      if(length(new.region) == 0) return()
+      printf("   new.region: %s ", paste(new.region, collapse=", "))
+      updatedSelection <- regionNames
+      if(new.region == "all.dna")
+         updatedSelection <- "all.dna"
+      else if("all.dna" %in% regionNames)
+         updatedSelection <- regionNames[-grep("all.dna", regionNames)]
+      state$activeRegions <- updatedSelection
+      updateCheckboxGroupInput(session, "specifyActiveRegions", label=NULL, choices=NULL,
+                               selected=updatedSelection)
+      })
 
    observeEvent(input$displaySNPsButton, {
       updateTabsetPanel(session, "trenaTabs", select="igvTab");
