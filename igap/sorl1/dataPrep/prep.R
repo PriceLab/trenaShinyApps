@@ -149,7 +149,8 @@ if(!exists("tbl.bindingSites")){
    id.map <- mcols(MotifDb[unique(tbl.bs$motif)])$geneSymbol
    names(id.map) <- unique(tbl.bs$motif)
    tfs <- as.character(id.map[tbl.bs$motif])
-   tbl.bs$tf <- tfs
+   tbl.bs$tf <- toupper(tfs)    #  humanize any mouse tf geneSymbols (as in Id2 for SORL1)
+   dim(tbl.bs)
    save(tbl.bs, file="../shinyApp/data/tbl.bs.RData")
    track <- DataFrameQuantitativeTrack("bs", tbl.bs, color="darkgreen")
    displayTrack(igv, track)
@@ -158,7 +159,9 @@ if(!exists("tbl.bindingSites")){
    dim(tbl.ov)
    colnames(tbl.ov) <- c("snp", "bs")
    tbl.bs.snp <- cbind(tbl.bs[tbl.ov$bs,], tbl.gwas.thisGene[tbl.ov$snp,])
+   dim(tbl.bs.snp)
    colnames(tbl.bs.snp) <- c("chrom", "start", "stop", "motifScore", "motif", "tf", "chrom.snp", "loc", "junk", "rsid", "snpScore")
+   dim(tbl.bs.snp)
    tbl.snp.bs <- tbl.bs.snp[,  c("chrom", "start", "stop", "motifScore", "tf", "motif", "snpScore", "rsid", "loc")]
    track <- DataFrameAnnotationTrack("snp/bs", tbl.snp.bs, color="black")
    displayTrack(igv, track)
