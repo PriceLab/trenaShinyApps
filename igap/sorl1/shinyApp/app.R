@@ -25,8 +25,8 @@ loc.max <-  max(tbl.enhancers$end) + 2000
 chromosome <- tbl.enhancers$chrom[1]
 genome.name <- "hg38"
 #----------------------------------------------------------------------------------------------------
-totalColorCount <- 8
 colors <- brewer.pal(totalColorCount, "Dark2")
+totalColorCount <- length(colors)
 colorNumber <- 0
 #----------------------------------------------------------------------------------------------------
 enhancer.region <- sprintf("%s:%d-%d", chromosome, loc.min-1000, loc.max+1000)
@@ -93,6 +93,8 @@ ui <- fluidPage(
                      inline=TRUE),
 
         actionButton("displaySNPsButton", "Display IGAP GWAS SNPs"),
+        actionButton("showBindingSitesButton", "Show TF Binding Sites"),
+        actionButton("removeOptionalTracks", "Remove tracks"),
 
         HTML("<br><br>"),
 
@@ -102,7 +104,7 @@ ui <- fluidPage(
                     min = 0,
                     max = 12),
 
-        sliderInput("fimo.motif.significance", "FIMO motif score",
+        sliderInput("fimo.motif.significance", "TF binding site FIMO motif score",
                     value=4,
                     step=0.5,
                     min = 0,
@@ -113,7 +115,6 @@ ui <- fluidPage(
                      step=0.1,
                      min = 0,
                      max = 12),
-        actionButton("showBindingSitesButton", "Show TF Binding Sites"),
         actionButton("findDisruptiveSNPsButton", "SNPs which disrupt TF binding sites"),
         HTML("<br><br>"),
         actionButton("showSNPsNearBindingSitesButton", "SNPs near binding sites in enhancer regions"),
@@ -123,7 +124,7 @@ ui <- fluidPage(
                     min = 0,
                     max = 100)
 
-     ),
+     ),  # sidebarPanel
 
      mainPanel(
         tabsetPanel(type="tabs",
@@ -201,12 +202,9 @@ server <- function(input, output, session) {
 
 
    observeEvent(input$specifyActiveRegions, ignoreInit=TRUE, {
-      printf("--- specifyActiveRegions event")
       regionNames <- isolate(input$specifyActiveRegions)
-      printf("    regionNames: %s", paste(regionNames, collapse=", "))
       new.region <- setdiff(regionNames, state$activeRegions)
       if(length(new.region) == 0) return()
-      printf("   new.region: %s ", paste(new.region, collapse=", "))
       updatedSelection <- regionNames
       if(new.region == "all.dna")
          updatedSelection <- "all.dna"
@@ -218,65 +216,18 @@ server <- function(input, output, session) {
       })
 
    observeEvent(input$displaySNPsButton, {
-      updateTabsetPanel(session, "trenaTabs", select="igvTab");
-      regionNames <- input$specifyActiveRegions
-      tbl.snps <- tbl.gwas.thisGene
-      snp.track.name <- "snps"
-      removeTracksByName(session, snp.track.name);  # remove always, a new one may or may not be created
-      if("all.dna" %in% regionNames){
-         tbl.snps <- tbl.gwas.thisGene
-         }
-      if(!"all.dna" %in% regionNames){
-         tbl.union <- data.frame()
-         tbl.intersect <- tbl.gwas.thisGene
-         if("enhancers" %in% regionNames){
-            printf("--- enhancers")
-            tbl.ov <- as.data.frame(findOverlaps(GRanges(tbl.intersect), GRanges(tbl.enhancers)))
-            keepers <- unique(tbl.ov[,1])
-            tbl.intersect <- tbl.intersect[keepers,]
-            tbl.ov <- as.data.frame(findOverlaps(GRanges(tbl.snps), GRanges(tbl.enhancers)))
-            tbl.union <- rbind(tbl.union, tbl.snps[keepers,])
-            }
-         if("fp" %in% regionNames){
-            printf("--- fp")
-            tbl.ov <- as.data.frame(findOverlaps(GRanges(tbl.intersect), GRanges(tbl.fp)))
-            keepers <- unique(tbl.ov[,1])
-            tbl.intersect <- tbl.intersect[keepers,]
-            tbl.ov <- as.data.frame(findOverlaps(GRanges(tbl.snps), GRanges(tbl.fp)))
-            tbl.union <- rbind(tbl.union, tbl.snps[keepers,])
-            }
-         if("dhs" %in% regionNames){
-            printf("--- dhs")
-            tbl.ov <- as.data.frame(findOverlaps(GRanges(tbl.intersect), GRanges(tbl.dhs)))
-            keepers <- unique(tbl.ov[,1])
-            tbl.intersect <- tbl.intersect[keepers,]
-            tbl.ov <- as.data.frame(findOverlaps(GRanges(tbl.snps), GRanges(tbl.enhancers)))
-            tbl.union <- rbind(tbl.union, tbl.snps[keepers,])
-            }
-         combinationLogic <- isolate(input$regionFilteringMode)
-         printf("combination logic: %s", combinationLogic)
-         if(combinationLogic == "intersection")
-            tbl.snps <- tbl.intersect
-         if(combinationLogic == "union")
-            tbl.snps <- tbl.union
-         } # region names does NOT include "all.dna"
-      if(nrow(tbl.snps) > 0){
-         snp.score.threshold <- isolate(input$IGAP.snp.significance)
-         tbl.snps <- subset(tbl.snps, score >= snp.score.threshold)
-         colnames(tbl.snps)[1] <- "chr"
-         if(nrow(tbl.snps) > 0)
-             loadBedTrack(session, snp.track.name, tbl.snps, color="red")
-         } # nrow > 0
+      displaySNPs(session)
       })  # observe dipslaySNPsButton
 
 
    observeEvent(input$showBindingSitesButton, {
       updateTabsetPanel(session, "trenaTabs", select="igvTab");
-      for(i in seq_len(5)){
+      for(i in seq_len(10)){
         tf <- tbl.model$TF[i]
         displayBindingSites(session, tf)
         } # for i
       })
+
 
    observeEvent(input$showTargetGeneButton, {
      roi <- "chr6:41,152,337-41,213,272"
@@ -352,6 +303,10 @@ server <- function(input, output, session) {
       filters <- isolate(input$filters)
       snpShoulder <- isolate(input$snpShoulder)
       filter.result <- applyFilters(session, filters, trena.model, snpShoulder)
+      })
+
+   observeEvent(input$removeOptionalTracks, ignoreInit = TRUE, {
+      removeUserAddedTracks(session)
       })
 
    observeEvent(input$pwmMatchThreshold, {
@@ -598,28 +553,123 @@ removeTrack <- function(session, trackName)
 
 } # removeTrack
 #----------------------------------------------------------------------------------------------------
+displaySNPs <- function(session)
+{
+   updateTabsetPanel(session, "trenaTabs", select="igvTab");
+   regionNames <- isolate(session$input$specifyActiveRegions)
+   tbl.snps <- tbl.gwas.thisGene
+   snp.track.name <- "snps"
+   removeTracksByName(session, snp.track.name);  # remove always, a new one may or may not be created
+
+   if("all.dna" %in% regionNames){
+      tbl.snps <- tbl.gwas.thisGene
+      }
+
+   if(!"all.dna" %in% regionNames){
+      tbl.union <- data.frame()
+      tbl.intersect <- tbl.gwas.thisGene
+      if("enhancers" %in% regionNames){
+         printf("--- enhancers")
+         tbl.ov <- as.data.frame(findOverlaps(GRanges(tbl.intersect), GRanges(tbl.enhancers)))
+         keepers <- unique(tbl.ov[,1])
+         tbl.intersect <- tbl.intersect[keepers,]
+         tbl.ov <- as.data.frame(findOverlaps(GRanges(tbl.snps), GRanges(tbl.enhancers)))
+         tbl.union <- rbind(tbl.union, tbl.snps[keepers,])
+         }
+      if("fp" %in% regionNames){
+         printf("--- fp")
+         tbl.ov <- as.data.frame(findOverlaps(GRanges(tbl.intersect), GRanges(tbl.fp)))
+         keepers <- unique(tbl.ov[,1])
+         tbl.intersect <- tbl.intersect[keepers,]
+         tbl.ov <- as.data.frame(findOverlaps(GRanges(tbl.snps), GRanges(tbl.fp)))
+         tbl.union <- rbind(tbl.union, tbl.snps[keepers,])
+         }
+      if("dhs" %in% regionNames){
+         printf("--- dhs")
+         tbl.ov <- as.data.frame(findOverlaps(GRanges(tbl.intersect), GRanges(tbl.dhs)))
+         keepers <- unique(tbl.ov[,1])
+         tbl.intersect <- tbl.intersect[keepers,]
+         tbl.ov <- as.data.frame(findOverlaps(GRanges(tbl.snps), GRanges(tbl.enhancers)))
+         tbl.union <- rbind(tbl.union, tbl.snps[keepers,])
+         }
+      combinationLogic <- isolate(session$input$regionFilteringMode)
+      printf("combination logic: %s", combinationLogic)
+      if(combinationLogic == "intersection")
+         tbl.snps <- tbl.intersect
+      if(combinationLogic == "union")
+         tbl.snps <- tbl.union
+       } # region names does NOT include "all.dna"
+
+   if(nrow(tbl.snps) > 0){
+      snp.score.threshold <- isolate(session$input$IGAP.snp.significance)
+      tbl.snps <- subset(tbl.snps, score >= snp.score.threshold)
+      colnames(tbl.snps)[1] <- "chr"
+      if(nrow(tbl.snps) > 0)
+         loadBedTrack(session, snp.track.name, tbl.snps, color="red")
+      } # nrow > 0
+
+} # displaySNPs
+#----------------------------------------------------------------------------------------------------
 displayBindingSites <- function(session, target.tf)
 {
    if(!target.tf %in% tbl.bs$tf){
       printf("tf %s not found in tbl.bs", target.tf, state$currentModelName)
       return()
       }
-   motif.score.threshold <- isolate(session$input$fimo.motif.significance)
 
+   motif.score.threshold <- isolate(session$input$fimo.motif.significance)
    tbl.tfbs <- subset(tbl.bs, tf==target.tf & score >= motif.score.threshold)
    tbl.tfbs <- tbl.tfbs[, c("chrom", "start", "stop", "score")]
+   colnames(tbl.tfbs) <- c("chr", "start", "end", "value")
+
+      # now filter on regions
+
+   regionNames <- isolate(session$input$specifyActiveRegions)
+
+   if(!"all.dna" %in% regionNames){
+      tbl.union <- data.frame()
+      tbl.intersect <- tbl.tfbs
+      if("enhancers" %in% regionNames){
+         #printf("--- enhancers")
+         tbl.ov <- as.data.frame(findOverlaps(GRanges(tbl.intersect), GRanges(tbl.enhancers)))
+         keepers <- unique(tbl.ov[,1])
+         tbl.intersect <- tbl.intersect[keepers,]
+         tbl.ov <- as.data.frame(findOverlaps(GRanges(tbl.tfbs), GRanges(tbl.enhancers)))
+         tbl.union <- rbind(tbl.union, tbl.tfbs[keepers,])
+         }
+      if("fp" %in% regionNames){
+         #printf("--- fp")
+         tbl.ov <- as.data.frame(findOverlaps(GRanges(tbl.intersect), GRanges(tbl.fp)))
+            keepers <- unique(tbl.ov[,1])
+            tbl.intersect <- tbl.intersect[keepers,]
+            tbl.ov <- as.data.frame(findOverlaps(GRanges(tbl.tfbs), GRanges(tbl.fp)))
+            tbl.union <- rbind(tbl.union, tbl.tfbs[keepers,])
+            }
+         if("dhs" %in% regionNames){
+            #printf("--- dhs")
+            tbl.ov <- as.data.frame(findOverlaps(GRanges(tbl.intersect), GRanges(tbl.dhs)))
+            keepers <- unique(tbl.ov[,1])
+            tbl.intersect <- tbl.intersect[keepers,]
+            tbl.ov <- as.data.frame(findOverlaps(GRanges(tbl.tfbs), GRanges(tbl.enhancers)))
+            tbl.union <- rbind(tbl.union, tbl.tfbs[keepers,])
+            }
+         combinationLogic <- isolate(session$input$regionFilteringMode)
+         #printf("combination logic: %s", combinationLogic)
+         if(combinationLogic == "intersection")
+            tbl.tfbs <- tbl.intersect
+         if(combinationLogic == "union")
+            tbl.tfbs <- tbl.union
+      } # regionNames NOT "all.dna", but 1 or mor subsets: enhancers, dhs, fp
 
    if(nrow(tbl.tfbs) == 0)
       return()
 
-   colnames(tbl.tfbs) <- c("chr", "start", "end", "value")
    updateTabsetPanel(session, "trenaTabs", select="igvTab");
 
    later(function(){
-      colorNumber <<- (colorNumber + 1) %% totalColorCount
-      printf("colorNumber: %d: %s", colorNumber, colors[colorNumber])
-      loadBedGraphTrack(session, target.tf, tbl.tfbs, color=colors[colorNumber], quiet=TRUE)
-      }, 1)
+      colorNumber <<- (colorNumber %% totalColorCount) + 1
+      loadBedGraphTrack(session, target.tf, tbl.tfbs, color=colors[colorNumber], trackHeight=25, quiet=TRUE)
+      }, 0)
 
 } # displayBindingSites
 #------------------------------------------------------------------------------------------------------------------------
