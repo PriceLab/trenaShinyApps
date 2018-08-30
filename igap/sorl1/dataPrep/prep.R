@@ -74,6 +74,45 @@ if(!exists("igv")){
    showGenomicRegion(igv, big)
    }
 
+if(!exists("tbl.fp")){
+   genome.db.uri  <- "postgres://khaleesi/hg38"              # has gtf and motifsgenes tables
+   fpdbs <- c("brain_hint_20", "brain_hint_16", "brain_wellington_20", "brain_wellington_16")
+   tbl.fp.all <- data.frame()
+   for(fpdb in fpdbs){
+      project.db.uri <- sprintf("postgres://khaleesi/%s", fpdb)
+      fpf <- FootprintFinder(genome.db.uri, project.db.uri, quiet=TRUE)
+      tbl.fp <- getFootprintsInRegion(fpf, chromosome, region.start, region.end) # tss-200, tss+200)
+      dim(tbl.fp)
+      tbl.fp.reduced <- unique(tbl.fp[, c("chrom", "start", "endpos")])
+      colnames(tbl.fp.reduced) <- c("chrom", "start", "end")
+      dim(tbl.fp.reduced)
+      tbl.fp.all <- rbind(tbl.fp.all, tbl.fp.reduced)
+      }
+   dim(tbl.fp.all)
+   tbl.fp <- as.data.frame(reduce(GRanges(tbl.fp.all)))
+   tbl.fp <- tbl.fp[, c("seqnames", "start", "end")]
+   colnames(tbl.fp) <- c("chr", "start", "end")
+   tbl.fp$chr <- as.character(tbl.fp$chr)
+   dim(tbl.fp)
+   track <- DataFrameAnnotationTrack("bh20", tbl.fp.merged, color="darkgreen")
+   displayTrack(igv, track)
+   save(tbl.fp, file="../shinyApp/data/tbl.fp.RData")
+   }
+
+if(!exists("tbl.dhs")){
+   hdf <- HumanDHSFilter("hg38", "wgEncodeRegDnaseClustered", pwmMatchPercentageThreshold=0,
+                         geneInfoDatabase.uri="bogus", regions=data.frame(), pfms=list())
+   tableNames <- getEncodeRegulatoryTableNames(hdf)
+   tbl.dhs <- getRegulatoryRegions(hdf, "wgEncodeRegDnaseClustered", chromosome, region.start, region.end)
+   colnames(tbl.dhs) <- c("chr", "start", "end", "count", "value")
+   tbl.dhs <- tbl.dhs[, c("chr", "start", "end", "value")]
+   dim(tbl.dhs)
+   track <- DataFrameQuantitativeTrack("dhs", tbl.dhs, color="maroon")
+   displayTrack(igv, track)
+   save(tbl.dhs, file="../shinyApp/data/tbl.dhs.RData")
+   }
+
+
 if(!exists("tbl.gwas")){
    load("~/s/work/priceLab/AD/tbl.gwas.level_1.RData") # tbl.gwas
    tbl.gwas.fixed <- tbl.gwas[, c("CHR", "BP", "BP", "SNP", "P")]
@@ -98,24 +137,32 @@ if(!exists("tbl.gwas")){
 if(!exists("tbl.bindingSites")){
    tbl.region <- data.frame(chrom=chromosome, start=region.start, end=region.end, stringsAsFactors=FALSE)
    tbl.bindingSites <- findFimoHits(tbl.region, pval=10e-4)
+   dim(tbl.bindingSites)
    tbl.bindingSites$start <- tbl.bindingSites$start + region.start
    tbl.bindingSites$stop <- tbl.bindingSites$stop + region.start
    tbl.bindingSites$chrom <- chromosome
    #  with(tbl.bindingSites, plot(-log10(p.value), score))
    with(tbl.bindingSites, plot(-log10(p.value), score))
-   tbl.bs <- subset(tbl.bindingSites, score >= 5)
-   dim(tbl.bs)   # 2154 x 11
+   tbl.bs <- subset(tbl.bindingSites, score >= 3)
+   dim(tbl.bs)   # 14837 x 10 for score >= 3
    tbl.bs <- tbl.bs[, c("chrom", "start", "stop", "score", "motif")]
+   id.map <- mcols(MotifDb[unique(tbl.bs$motif)])$geneSymbol
+   names(id.map) <- unique(tbl.bs$motif)
+   tfs <- as.character(id.map[tbl.bs$motif])
+   tbl.bs$tf <- tfs
+   save(tbl.bs, file="../shinyApp/data/tbl.bs.RData")
    track <- DataFrameQuantitativeTrack("bs", tbl.bs, color="darkgreen")
    displayTrack(igv, track)
    gr.bs <- GRanges(tbl.bs)
    tbl.ov <- as.data.frame(findOverlaps(gr.snp, gr.bs))
    dim(tbl.ov)
    colnames(tbl.ov) <- c("snp", "bs")
-   tbl.snp.bs <- tbl.bs[tbl.ov$bs, c("chrom", "start", "stop", "motif")]
+   tbl.bs.snp <- cbind(tbl.bs[tbl.ov$bs,], tbl.gwas.thisGene[tbl.ov$snp,])
+   colnames(tbl.bs.snp) <- c("chrom", "start", "stop", "motifScore", "motif", "tf", "chrom.snp", "loc", "junk", "rsid", "snpScore")
+   tbl.snp.bs <- tbl.bs.snp[,  c("chrom", "start", "stop", "motifScore", "tf", "motif", "snpScore", "rsid", "loc")]
    track <- DataFrameAnnotationTrack("snp/bs", tbl.snp.bs, color="black")
    displayTrack(igv, track)
-   save(tbl.snp.bs, file="tbl.snp.bs.RData")
+   save(tbl.snp.bs, file="../shinyApp/data/tbl.snp.bs.RData")
    }
 
 if(!exists("tbl.breaks")){
