@@ -8,14 +8,18 @@ library(MotifDb)
 library(RUnit)
 library(RColorBrewer)
 #----------------------------------------------------------------------------------------------------
+TFOI <- 10
+#----------------------------------------------------------------------------------------------------
 load("data/tbl.model.RData")                      # "tbl.model"
 load("data/mtx.withDimers.cer.ros.tcx.RData")     # "mtx.cer" "mtx.ros" "mtx.tcx"
 load("data/tbl.enhancers.RData")                  # "tbl.enhancers"
 load("data/tbl.gwas.thisGene.RData")              # "tbl.gwas.thisGene"
 load("data/tbl.bs.RData")                         # "tbl.bs"                 14837 x 5
 load("data/tbl.snp.bs.RData")                     # "tbl.snp.bs"                70 x 4
-load("data/tbl.fp.RData")                         # "tbl.fp"                  2394 x 5 hint|wellington 20|16
-load("data/tbl.dhs.RData")                        # "tbl.dhs"                  401 x 4 encode "wgEncodeRegDnaseClustered"
+load("data/tbl.fp.RData")                         # "tbl.fp"                  2394 x 5  hint|wellington 20|16
+load("data/tbl.dhs.RData")                        # "tbl.dhs"                  401 x 4  encode "wgEncodeRegDnaseClustered"
+load("data/tbl.broken.RData")                     # "tbl.broken"                28 x 19 from motifbreakR
+
 #----------------------------------------------------------------------------------------------------
 targetGene <- "SORL1"
 strand <- "+"
@@ -25,7 +29,7 @@ loc.max <-  max(tbl.enhancers$end) + 2000
 chromosome <- tbl.enhancers$chrom[1]
 genome.name <- "hg38"
 #----------------------------------------------------------------------------------------------------
-colors <- brewer.pal(totalColorCount, "Dark2")
+colors <- brewer.pal(8, "Dark2")
 totalColorCount <- length(colors)
 colorNumber <- 0
 #----------------------------------------------------------------------------------------------------
@@ -35,7 +39,8 @@ tss.region      <- sprintf("%s:%d-%d", chromosome, tss-2000, tss+2000)
 
 genomic.roi <- list(genePlusMinus10kb=gene.region,
                     tssPlusMinus2kb=tss.region,
-                    enhancers=enhancer.region
+                    enhancers=enhancer.region,
+                    id2Break="chr11:121,580,715-121,580,970"
                     )
 
 currentShoulder <- 0
@@ -69,7 +74,8 @@ ui <- fluidPage(
                     c(" ",
                       "Full extent of predicted enhancers" = "enhancers",
                                            "gene +/- 10kb" = "genePlusMinus10kb",
-                                             "tss +/- 2kb" = "tssPlusMinus2kb")),
+                                             "tss +/- 2kb" = "tssPlusMinus2kb",
+                              "ID2 disrupted binding site" = "id2Break")),
 
         selectInput("addTrack", "Add Regulatory Region Track:",
                    c(" ",
@@ -94,6 +100,8 @@ ui <- fluidPage(
 
         actionButton("displaySNPsButton", "Display IGAP GWAS SNPs"),
         actionButton("showBindingSitesButton", "Show TF Binding Sites"),
+        actionButton("findDisruptiveSNPsButton", "SNPs which disrupt TF binding sites"),
+
         actionButton("removeOptionalTracks", "Remove tracks"),
 
         HTML("<br><br>"),
@@ -105,19 +113,18 @@ ui <- fluidPage(
                     max = 12),
 
         sliderInput("fimo.motif.significance", "TF binding site FIMO motif score",
-                    value=4,
-                    step=0.5,
+                    value=3.4,
+                    step=0.1,
                     min = 0,
                     max = round(0.5 + max(tbl.bs$score)),
                     round=-2),
-        sliderInput("fimo.snp.effect", "SNP binding affinity loss score",
-                     value = 0.5,
-                     step=0.1,
-                     min = 0,
-                     max = 12),
-        actionButton("findDisruptiveSNPsButton", "SNPs which disrupt TF binding sites"),
-        HTML("<br><br>"),
-        actionButton("showSNPsNearBindingSitesButton", "SNPs near binding sites in enhancer regions"),
+        #sliderInput("fimo.snp.effect", "SNP binding affinity loss score",
+        #             value = 0.5,
+        #             step=0.1,
+        #             min = 0,
+        #             max = 12),
+        #HTML("<br><br>"),
+        actionButton("showSNPsNearBindingSitesButton", "SNPs near binding sites"),
         HTML("<br><br>"),
         sliderInput("snpShoulder", "Proximity",
                     value = 10,
@@ -222,12 +229,11 @@ server <- function(input, output, session) {
 
    observeEvent(input$showBindingSitesButton, {
       updateTabsetPanel(session, "trenaTabs", select="igvTab");
-      for(i in seq_len(10)){
+      for(i in seq_len(TFOI)){
         tf <- tbl.model$TF[i]
         displayBindingSites(session, tf)
         } # for i
       })
-
 
    observeEvent(input$showTargetGeneButton, {
      roi <- "chr6:41,152,337-41,213,272"
@@ -290,12 +296,13 @@ server <- function(input, output, session) {
       })
 
    observeEvent(input$findDisruptiveSNPsButton, {
-      snpSignificanceThreshold <- isolate(session$input$IGAP.snp.significance)
-      motifMatchThreshold <- isolate(session$input$fimo.motif.significance)
-      bindingLossThreshold <- snpEffect.pval.threshold <- isolate(session$input$fimo.snp.effect)
-      tbl.disruptions <- findDisruptiveSNPs(snpSignificanceThreshold, motifMatchThreshold, bindingLossThreshold)
-      if(nrow(tbl.disruptions) > 0)
-         displayDisruptiveSnps(session, tbl.disruptions)
+      displayDisruptiveSnps(session)
+      #snpSignificanceThreshold <- isolate(session$input$IGAP.snp.significance)
+      #motifMatchThreshold <- isolate(session$input$fimo.motif.significance)
+      #bindingLossThreshold <- snpEffect.pval.threshold <- isolate(session$input$fimo.snp.effect)
+      #tbl.disruptions <- findDisruptiveSNPs(snpSignificanceThreshold, motifMatchThreshold, bindingLossThreshold)
+      #if(nrow(tbl.disruptions) > 0)
+      #   displayDisruptiveSnps(session, tbl.disruptions)
       })
 
    observeEvent(input$findSnpsInModelButton, {
@@ -337,45 +344,48 @@ server <- function(input, output, session) {
    observeEvent(input$showSNPsNearBindingSitesButton, {
       shoulder <- isolate(input$snpShoulder)
       snpSignificanceThreshold <- isolate(session$input$IGAP.snp.significance)
-      tbl.snpFiltered <- subset(tbl.snp, pScore >= snpSignificanceThreshold)
-      motifMatchThreshold <- isolate(session$input$fimo.motif.significance)
-      tbl.tfbs <- subset(tbl.bs, motif.pScore >= motifMatchThreshold)
-      tbl.tfbs <- tbl.tfbs[, c("chrom", "motifStart", "motifEnd", "motif.pVal", "motifName", "motif.pScore")]
-      tbl.tfbs <- tbl.tfbs[, c("chrom", "motifStart", "motifEnd", "motif.pScore", "motifName")]
-      colnames(tbl.tfbs) <- c("chrom", "start", "end", "score", "motifName")
-      tbl.snpsNearEnough <- data.frame()
-      gr.snps <- GRanges(tbl.snp)
-      gr.tfbs <- GRanges(data.frame(chrom=tbl.tfbs$chrom,
-                                    start=tbl.tfbs$start - shoulder,
-                                    end=tbl.tfbs$end+shoulder))
-      tbl.ov <- as.data.frame(findOverlaps(gr.snps, gr.tfbs))
-      colnames(tbl.ov) <- c("snp", "tfbs")
-      tbl.snpsNearEnough <- tbl.snp[tbl.ov$snp, c("chrom", "start", "end", "rsid")]
-      motifNames <- tbl.tfbs$motifName[tbl.ov$tfbs]
-      tbl.snpsNearEnough$motifName <- motifNames
-      #gr.eqtl <- GRanges(tbl.eqtl)
-      #tbl.ov <- as.data.frame(findOverlaps(gr.eqtl, gr.tfbs))
+      bindingSiteMotifMatchThreshold <- isolate(session$input$fimo.motif.significance)
+      displaySNPsCloseToBindingSites(session, shoulder, snpSignificanceThreshold, bindingSiteMotifMatchThreshold)
+      #tbl.snp <- tbl.gwas.thisGene
+      #tbl.snpFiltered <- subset(tbl.snp, score >= snpSignificanceThreshold)
+      #browser()
+      #tbl.tfbs <- subset(tbl.bs, motif.pScore >= motifMatchThreshold)
+      #tbl.tfbs <- tbl.tfbs[, c("chrom", "motifStart", "motifEnd", "motif.pVal", "motifName", "motif.pScore")]
+      #tbl.tfbs <- tbl.tfbs[, c("chrom", "motifStart", "motifEnd", "motif.pScore", "motifName")]
+      #colnames(tbl.tfbs) <- c("chrom", "start", "end", "score", "motifName")
+      #tbl.snpsNearEnough <- data.frame()
+      #gr.snps <- GRanges(tbl.snp)
+      #gr.tfbs <- GRanges(data.frame(chrom=tbl.tfbs$chrom,
+      #                              start=tbl.tfbs$start - shoulder,
+      #                              end=tbl.tfbs$end+shoulder))
+      #tbl.ov <- as.data.frame(findOverlaps(gr.snps, gr.tfbs))
       #colnames(tbl.ov) <- c("snp", "tfbs")
+      #tbl.snpsNearEnough <- tbl.snp[tbl.ov$snp, c("chrom", "start", "end", "rsid")]
       #motifNames <- tbl.tfbs$motifName[tbl.ov$tfbs]
-      #tbl.new <- tbl.eqtl[tbl.ov$snp, c("chrom", "start", "end", "rsid")]
-      #tbl.new$motifName <- motifNames
-      #tbl.snpsNearEnough <- rbind(tbl.snpsNearEnough, tbl.new)
-      rownames(tbl.snpsNearEnough) <- NULL
-      tbl.snpsNearEnough <- unique(tbl.snpsNearEnough)
-      tbl.snpsNearEnough$name <- with(tbl.snpsNearEnough, paste(rsid, motifName, sep=":"))
-      tbl.snpsNearEnough <- tbl.snpsNearEnough[, c("chrom", "start", "end", "name")]
-      temp.filename <- tempfile(tmpdir="tmp", fileext=".bed")
-      write.table(tbl.snpsNearEnough, sep="\t", row.names=FALSE, col.names=FALSE, quote=FALSE, file=temp.filename)
+      #tbl.snpsNearEnough$motifName <- motifNames
+      ##gr.eqtl <- GRanges(tbl.eqtl)
+      ##tbl.ov <- as.data.frame(findOverlaps(gr.eqtl, gr.tfbs))
+      ##colnames(tbl.ov) <- c("snp", "tfbs")
+      ##motifNames <- tbl.tfbs$motifName[tbl.ov$tfbs]
+      ##tbl.new <- tbl.eqtl[tbl.ov$snp, c("chrom", "start", "end", "rsid")]
+      ##tbl.new$motifName <- motifNames
+      ##tbl.snpsNearEnough <- rbind(tbl.snpsNearEnough, tbl.new)
+      #rownames(tbl.snpsNearEnough) <- NULL
+      #tbl.snpsNearEnough <- unique(tbl.snpsNearEnough)
+      #tbl.snpsNearEnough$name <- with(tbl.snpsNearEnough, paste(rsid, motifName, sep=":"))
+      #tbl.snpsNearEnough <- tbl.snpsNearEnough[, c("chrom", "start", "end", "name")]
+      #temp.filename <- tempfile(tmpdir="tmp", fileext=".bed")
+      #write.table(tbl.snpsNearEnough, sep="\t", row.names=FALSE, col.names=FALSE, quote=FALSE, file=temp.filename)
 
-      updateTabsetPanel(session, "trenaTabs", select="igvTab");
-      later(function(){
-         session$sendCustomMessage(type="displayBedTrack",
-                                   message=(list(filename=temp.filename,
-                                                 trackName="nearby snps",
-                                                 displayMode="EXPANDED",
-                                                 color="red",
-                                                 trackHeight=40)))
-         }, 1)
+      #updateTabsetPanel(session, "trenaTabs", select="igvTab");
+      #later(function(){
+      #   session$sendCustomMessage(type="displayBedTrack",
+      #                             message=(list(filename=temp.filename,
+      #                                           trackName="nearby snps",
+      #                                           displayMode="EXPANDED",
+      #                                           color="red",
+      #                                           trackHeight=40)))
+      #   }, 1)
       })
 
    observeEvent(input$geneModelTable_rows_selected, {
@@ -512,23 +522,29 @@ test_findDisruptiveSNPs <- function()
 
 } # test_findDisruptiveSNPs
 #------------------------------------------------------------------------------------------------------------------------
-displayDisruptiveSnps <- function(session, tbl.disruptions)
+displayDisruptiveSnps <- function(session) #, tbl.disruptions)
 {
-   coi <- c("chrom", "start", "end", "motifName", "tf", "motifScore", "rsid")
-   tbl.condensed <- tbl.disruptions[, coi]
-   tfs <- unique(tbl.condensed$tf)
-   for(geneSymbol in tfs){
-      tbl.tmp <- subset(tbl.condensed, tf==geneSymbol)
-      tbl.tmp$motifName <- sprintf("tfbs-snp:%s:%s", tbl.tmp$motifName, tbl.tmp$rsid)
-      temp.filename <- tempfile(tmpdir="./tmp", fileext=".bed")
-      write.table(tbl.tmp, sep="\t", row.names=FALSE, col.names=FALSE, quote=FALSE, file=temp.filename)
-      session$sendCustomMessage(type="displayBedTrack",
-                             message=(list(filename=temp.filename,
-                                           trackName=sprintf("%s w/snp", geneSymbol),
-                                           displayMode="EXPANDED",
-                                           color="red",
-                                           trackHeight=40)))
-      } # for geneSymbol
+   # quick hack.  todo: use filterByRegions
+   removeTracksByName(session, "broken");  # remove always, a new one may or may not be created
+
+   threshold <- session$input$IGAP.snp.significance
+   rsids.meeting.significance <- subset(tbl.gwas.thisGene, score >= threshold)$rsid
+
+   chr.col <- grep("chr", colnames(tbl.broken))
+   pos.col <- grep("snpPos", colnames(tbl.broken))
+   rsid.col <- grep("rsid", colnames(tbl.broken))
+   delta.col <- grep("delta", colnames(tbl.broken))
+
+   other.col <- setdiff(seq_len(ncol(tbl.broken)), c(chr.col, pos.col, rsid.col, delta.col))
+   tbl.fixed <- tbl.broken[, c(chr.col, pos.col, pos.col, rsid.col, delta.col, other.col)]
+   printf("broken snp total: %d", nrow(tbl.fixed))
+   tbl.fixed <- subset(tbl.fixed, rsid %in% rsids.meeting.significance)
+   printf("broken snp total after score filtering: %d", nrow(tbl.fixed))
+   if(nrow(tbl.fixed) == 0) return()
+
+   colnames(tbl.fixed)[1:3] <- c("chr", "start", "end")
+
+   loadBedTrack(session, "broken", tbl.fixed, color="red")
 
 } # displayDisruptiveSnps
 #------------------------------------------------------------------------------------------------------------------------
@@ -618,10 +634,25 @@ displayBindingSites <- function(session, target.tf)
       }
 
    motif.score.threshold <- isolate(session$input$fimo.motif.significance)
+   #printf("motif.score.threshold: %f", motif.score.threshold)
    tbl.tfbs <- subset(tbl.bs, tf==target.tf & score >= motif.score.threshold)
-   tbl.tfbs <- tbl.tfbs[, c("chrom", "start", "stop", "score")]
+   tbl.tfbs <- tbl.tfbs[, c("chr", "start", "end", "score")]
    colnames(tbl.tfbs) <- c("chr", "start", "end", "value")
-
+   tbl.broken.tmp <- tbl.broken[, c("chr", "snpPos", "snpPos")]
+   colnames(tbl.broken.tmp) <- c("chr", "start", "end")
+   printf("tbl.broken.tmp rows: %d", nrow(tbl.broken.tmp))
+   printf("      tbl.tfbs rows: %d", nrow(tbl.tfbs))
+   if(nrow(tbl.broken.tmp) == 0 | nrow(tbl.tfbs) == 0) return()
+   #browser()
+   printf("before findOverlaps")
+   tbl.ov <- as.data.frame(findOverlaps(GRanges(tbl.broken.tmp), GRanges(tbl.tfbs)))
+   printf("after findOverlaps")
+   colnames(tbl.ov) <- c("snp", "bs")
+   hits <-  nrow(tbl.ov)
+   if(hits > 0){
+      printf("broken snps in binding sites for %s: %d", target.tf, hits)
+      print(tbl.tfbs[tbl.ov$bs,])
+      }
       # now filter on regions
 
    regionNames <- isolate(session$input$specifyActiveRegions)
@@ -750,6 +781,95 @@ plotTfTargetGeneCorrelation <- function(session, tf, expression.matrix.id)
 
 
 } # plotTfTargetGeneCorrelation
+#------------------------------------------------------------------------------------------------------------------------
+displaySNPsCloseToBindingSites <- function(session, shoulder, snpSignificanceThreshold, bindingSiteMotifMatchThreshold)
+{
+   printf("--- displaySNPsCloseToBindingSites")
+   printf("             shoulder: %d", shoulder)
+   printf("        snp threshold: %f", snpSignificanceThreshold)
+   printf("   bs motif threshold: %f", bindingSiteMotifMatchThreshold)
+
+   tbl.bs.x <- subset(tbl.bs, score >= bindingSiteMotifMatchThreshold)
+   printf("bindingSites after subset on motif score: %d", nrow(tbl.bs.x))
+   top.tfs <- tbl.model$TF[1:TFOI]
+   tbl.bs.x <- subset(tbl.bs.x, tf %in% top.tfs)
+   printf("bindingSites after subset on %d top tfs: %d", length(top.tfs), nrow(tbl.bs.x))
+   printf("bindingSites before filter: %d", nrow(tbl.bs.x))
+
+   regionNames <- isolate(session$input$specifyActiveRegions)
+   combinationLogic <- isolate(session$input$regionFilteringMode)
+   tbl.bs.x <- applyRegionsFilter(tbl.bs.x, regionNames, combinationLogic)
+   printf("bindingSites after filter: %d", nrow(tbl.bs.x))
+
+   tbl.snp.x <- subset(tbl.gwas.thisGene, score >= snpSignificanceThreshold)
+   dim(tbl.snp.x)
+
+   if((nrow(tbl.bs.x) > 0) & (nrow(tbl.snp.x) > 0)){
+      gr.snp <- GRanges(seqnames=chromosome, IRanges(start=tbl.snp.x$start-shoulder, end=tbl.snp.x$end+shoulder))
+      gr.bs <- GRanges(seqnames=chromosome, IRanges(start=tbl.bs.x$start-shoulder, end=tbl.bs.x$end+shoulder))
+      tbl.ov <- as.data.frame(findOverlaps(gr.snp, gr.bs))
+      colnames(tbl.ov) <- c("snp", "bs")
+      dim(tbl.ov)
+      printf(" proximal snp count: %d", nrow(tbl.ov))
+      if(nrow(tbl.ov) > 0){
+         tbl.snp.selected <- tbl.snp.x[unique(tbl.ov$snp),]
+         colnames(tbl.snp.selected)[1] <- "chr"
+         loadBedTrack(session, "proximal snps", tbl.snp.selected, color="darkred", quiet=TRUE)
+         } # overlaps
+      } # both binding sites and snps met threshold
+
+} # displaySNPsCloseToBindingSites
+#------------------------------------------------------------------------------------------------------------------------
+applyRegionsFilter <- function(tbl, regionNames, combinationLogic)
+{
+   stopifnot(colnames(tbl)[1:3] == c("chrom", "start", "end") |
+             colnames(tbl)[1:3] == c("chr", "start", "end")
+             )
+
+   if("all.dna" %in% regionNames)
+     return(tbl)
+
+   tbl.union <- data.frame()
+   tbl.intersect <- tbl
+
+   if("enhancers" %in% regionNames){
+      printf("--- enhancers")
+      tbl.ov <- as.data.frame(findOverlaps(GRanges(tbl.intersect), GRanges(tbl.enhancers)))
+      keepers <- unique(tbl.ov[,1])
+      tbl.intersect <- tbl.intersect[keepers,]
+      tbl.ov <- as.data.frame(findOverlaps(GRanges(tbl), GRanges(tbl.enhancers)))
+      tbl.union <- rbind(tbl.union, tbl[keepers,])
+      }
+
+   if("fp" %in% regionNames){
+      printf("--- fp")
+      tbl.ov <- as.data.frame(findOverlaps(GRanges(tbl.intersect), GRanges(tbl.fp)))
+      keepers <- unique(tbl.ov[,1])
+      tbl.intersect <- tbl.intersect[keepers,]
+      tbl.ov <- as.data.frame(findOverlaps(GRanges(tbl), GRanges(tbl.fp)))
+      tbl.union <- rbind(tbl.union, tbl[keepers,])
+      }
+
+   if("dhs" %in% regionNames){
+      printf("--- dhs")
+      tbl.ov <- as.data.frame(findOverlaps(GRanges(tbl.intersect), GRanges(tbl.dhs)))
+      keepers <- unique(tbl.ov[,1])
+      tbl.intersect <- tbl.intersect[keepers,]
+      tbl.ov <- as.data.frame(findOverlaps(GRanges(tbl), GRanges(tbl.enhancers)))
+      tbl.union <- rbind(tbl.union, tbl[keepers,])
+      }
+
+   printf("combination logic: %s", combinationLogic)
+
+   if(combinationLogic == "intersection")
+      tbl.out <- tbl.intersect
+
+   if(combinationLogic == "union")
+      tbl.out <- tbl.union
+
+    invisible(tbl.out)
+
+} # applyRegionsFilter
 #------------------------------------------------------------------------------------------------------------------------
 shinyOptions <- list()
 

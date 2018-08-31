@@ -27,6 +27,7 @@ if(!exists("fimo")){
 findFimoHits <- function(tbl.regions, pval=10e-4)
 {
    seqs <- as.list(as.character(with(tbl.regions, getSeq(BSgenome.Hsapiens.UCSC.hg38, chrom, start, end))))
+   printf("finding fimo hits, pval = %f", pval)
    x <- requestMatch(fimo, seqs, pval)
    invisible(x)
 
@@ -136,20 +137,27 @@ if(!exists("tbl.gwas")){
 
 if(!exists("tbl.bindingSites")){
    tbl.region <- data.frame(chrom=chromosome, start=region.start, end=region.end, stringsAsFactors=FALSE)
-   tbl.bindingSites <- findFimoHits(tbl.region, pval=10e-4)
+   tbl.bindingSites <- findFimoHits(tbl.region, pval=10e-2)
    dim(tbl.bindingSites)
    tbl.bindingSites$start <- tbl.bindingSites$start + region.start
    tbl.bindingSites$stop <- tbl.bindingSites$stop + region.start
+      # overwrite the native fimo score with -log10(fimo.p.value)
+   tbl.bindingSites$score <- -log10(tbl.bindingSites$p.value)
    tbl.bindingSites$chrom <- chromosome
    #  with(tbl.bindingSites, plot(-log10(p.value), score))
-   with(tbl.bindingSites, plot(-log10(p.value), score))
-   tbl.bs <- subset(tbl.bindingSites, score >= 3)
-   dim(tbl.bs)   # 14837 x 10 for score >= 3
+
+   tbl.bs <- subset(tbl.bindingSites, score >= 2)
+   dim(tbl.bs)   # 151k for score >= 2
    tbl.bs <- tbl.bs[, c("chrom", "start", "stop", "score", "motif")]
+   colnames(tbl.bs) <- c("chr", "start", "end", "score", "motif")
    id.map <- mcols(MotifDb[unique(tbl.bs$motif)])$geneSymbol
    names(id.map) <- unique(tbl.bs$motif)
    tfs <- as.character(id.map[tbl.bs$motif])
    tbl.bs$tf <- toupper(tfs)    #  humanize any mouse tf geneSymbols (as in Id2 for SORL1)
+      # this binding site must be found.  it overlaps with motifbreakR's rs17125473 for CEBPA
+      # with a score of 2.3
+   checkEquals(nrow(subset(tbl.bs, tf == "CEBPA" & start > 121574082 & end < 121574123)), 1)
+
    dim(tbl.bs)
    save(tbl.bs, file="../shinyApp/data/tbl.bs.RData")
    track <- DataFrameQuantitativeTrack("bs", tbl.bs, color="darkgreen")
@@ -160,16 +168,17 @@ if(!exists("tbl.bindingSites")){
    colnames(tbl.ov) <- c("snp", "bs")
    tbl.bs.snp <- cbind(tbl.bs[tbl.ov$bs,], tbl.gwas.thisGene[tbl.ov$snp,])
    dim(tbl.bs.snp)
-   colnames(tbl.bs.snp) <- c("chrom", "start", "stop", "motifScore", "motif", "tf", "chrom.snp", "loc", "junk", "rsid", "snpScore")
+   colnames(tbl.bs.snp) <- c("chrom", "start", "end", "motifScore", "motif", "tf", "chrom.snp", "loc", "junk", "rsid", "snpScore")
    dim(tbl.bs.snp)
-   tbl.snp.bs <- tbl.bs.snp[,  c("chrom", "start", "stop", "motifScore", "tf", "motif", "snpScore", "rsid", "loc")]
+   tbl.snp.bs <- tbl.bs.snp[,  c("chrom", "start", "end", "motifScore", "tf", "motif", "snpScore", "rsid", "loc")]
    track <- DataFrameAnnotationTrack("snp/bs", tbl.snp.bs, color="black")
    displayTrack(igv, track)
    save(tbl.snp.bs, file="../shinyApp/data/tbl.snp.bs.RData")
    }
 
 if(!exists("tbl.breaks")){
-   motif.names <- unique(tbl.bindingSites$motif)   # 17
+   motif.names <- unique(tbl.bs$motif)   # 17
+   length(motif.names)
    motifs <- MotifDb[motif.names]
    snps.gr <- snps.from.rsid(rsid = tbl.gwas.thisGene$rsid,
                              dbSNP=SNPlocs.Hsapiens.dbSNP150.GRCh38,
@@ -178,7 +187,7 @@ if(!exists("tbl.breaks")){
    results <- motifbreakR(snpList = snps.gr,
                           filterp = TRUE,
                           pwmList = motifs,
-                          show.neutral=TRUE,
+                          show.neutral=FALSE,
                           method = c("ic", "log", "notrans")[2],
                           bkg = c(A=0.25, C=0.25, G=0.25, T=0.25),
                           BPPARAM = BiocParallel::bpparam(),
@@ -187,9 +196,17 @@ if(!exists("tbl.breaks")){
    results.filtered <- results[(results$pctRef > 0.70 & results$delta > 0.15) |
                                 (results$pctRef > 0.80 & results$delta > 0.10)] # 44
    length(results.filtered)
+   tbl.broken <- as.data.frame(mcols(results.filtered))
+   tbl.broken$geneSymbol <-  toupper(tbl.broken$geneSymbol)
+   all(tbl.broken$geneSymbol %in% tbl.model$TF)
+   setdiff(tbl.broken$geneSymbol, tbl.model$TF)
+   tbl.broken$chr <- chromosome
+   tbl.broken$rsid <- rownames(tbl.broken)
+   rownames(tbl.broken) <- NULL
+
+   save(tbl.broken, file="../shinyApp/data/tbl.broken.RData")
 
    range <- seq_len(length(results.filtered))
-   range <- 1:3
 
    for(i in range){
       x <- results.filtered[i]
@@ -203,3 +220,4 @@ if(!exists("tbl.breaks")){
       #Sys.sleep(2)
       }
 
+   } # tbl.breaks
