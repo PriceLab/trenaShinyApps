@@ -13,6 +13,6 @@ WORKDIR /home/trena
 RUN R -f ./installTrenaCodePrequisites.R
 COPY packages/*gz ./
 RUN R CMD INSTALL -l ~/library MotifDb_1.23.11.tar.gz
-RUN R CMD INSTALL -l ~/library igvShiny_0.99.35.tar.gz
-RUN R CMD INSTALL -l ~/library cyjShiny_0.99.5.tar.gz
+RUN R CMD INSTALL -l ~/library igvShiny_0.99.44.tar.gz
+RUN R CMD INSTALL -l ~/library cyjShiny_0.99.8.tar.gz
 RUN R CMD INSTALL -l ~/library trena_1.3.7.tar.gz
