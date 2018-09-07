@@ -41,24 +41,33 @@ ui <- fluidPage(
         selectInput("displayGenomicRegion", "Display Genomic Region:",
                     c("IREG1" = "gene",
                       "promoter" = "promoter",
-                      "neighborhood" = "neighborhood")),
+                      "neighborhood" = "neighborhood"),
+                      selected="neighborhood"),
 
         selectInput("addTrack", "Add Track:",
                    c("",
                      "bud DHS" = "bud.dhs",
-                     "leaf DHS" = "leaf.dhs"
-                     )),
+                     "leaf DHS" = "leaf.dhs"),
+                     selected="bud.dhs"),
 
-        selectInput("addBindingSites", "Add TF binding sites for regulatory model:",
-                   c(" ",
-                     "transcript 1"="transcript.1.model",
-                     "transcript 2"="transcript.2.model",
-                     "1 & 2"="both.transcript.models"
-                     )),
+        #sliderInput("fimo.motif.significance", "FIMO motif score",
+        #            value = 2,
+        #            step=0.1,
+        #            min = 0,
+        #            max = 12,
+        #            round=-2),
 
+        sliderInput("dhs.threshold", "DNase score",
+                    value = 2,
+                    step=0.1,
+                    min = 0,
+                    max = 10,
+                    round=-2),
+
+        actionButton("addBindingSites", "Add TF binding sites from regulatory model"),
+        HTML("<br>"),
         actionButton("removeOptionalTracks", "Remove tracks")
-
-       ),  # sidebarPanel
+        ),  # sidebarPanel
 
      mainPanel(
         tabsetPanel(type="tabs",
@@ -98,7 +107,7 @@ server <- function(input, output, session) {
       later(function() {updateSelectInput(session, "displayGenomicRegion", selected=character(0))}, 1)
       })
 
-   observeEvent(input$addTrack, ignoreInit=TRUE, {
+   observeEvent(input$addTrack, {
       trackName <- input$addTrack
       if(nchar(trackName) == 0) return()
       printf("addTrack: %s", trackName)
@@ -111,34 +120,60 @@ server <- function(input, output, session) {
       later(function() {updateSelectInput(session, "addTrack", selected=character(0))}, 1)
       })
 
-   observeEvent(input$addBindingSites, ignoreInit= TRUE, {
+   observeEvent(input$addBindingSites, ignoreInit=TRUE, {
       modelName <- input$addBindingSites;
       printf("addBindingSites: %s", modelName);
-      tbl.bs <- switch(modelName, "transcript.1.model" = tbl.bindingSites.1,
-                                  "transcript.2.model" = tbl.bindingSites.2,
-                                  "both.transcript.models" = rbind(tbl.bindingSites.1, tbl.bindingSites.2))
-      transcript.number <- switch(modelName, "transcript.1.model" = ".1",
-                                             "transcript.2.model" = ".2",
-                                             "both.transcript.models" = "")
-      tbl.bs <- tbl.bs[, c("chrom", "start", "stop", "score", "motif", "geneSymbol")]
-      colnames(tbl.bs) <- c("chr", "start", "end", "value", "sampleID", "geneSymbol")
-      printf("loadingBedGraphTrack, dim: %d %d", nrow(tbl.bs), ncol(tbl.bs))
-      myFunc <- function(){
-         printf("entering myFunc, rows in tbl: %d", nrow(tbl.bs));
-         tfs <- sort(unique(tbl.bs$geneSymbol))
-         printf(" %d tfs", length(tfs))
-         for(tf in tfs){
-            colorNumber <<- (colorNumber + 1) %% totalColorCount
-            tbl.bs.sub <- subset(tbl.bs, geneSymbol==tf)
-            printf("new tf '%s', %d rows", tf, nrow(tbl.bs.sub))
-            track.name <- sprintf("%s%s", tf, transcript.number)
-            loadBedGraphTrack(session, track.name, tbl.bs.sub, color=colors[colorNumber], trackHeight=30)
-            } # for tf
-         }
-        # myFunc <- function() loadBedGraphTrack(session, modelName, tbl.bs, color=colors[colorNumber], trackHeight=30)
+      fimo.threshold <- isolate(input$fimo.motif.significance)
+      dhs.threshold <-  isolate(input$dhs.threshold)
+      printf("fimo: %f   dhs: %f", fimo.threshold, dhs.threshold)
+      colors <- brewer.pal(8, "Dark2")
+      totalColorCount <- length(colors)
+      colorNumber <- 0
+      for(tf in unique(tbl.bindingSites$geneSymbol)){
+         tbl.tfbs <- subset(tbl.bindingSites, geneSymbol==tf)[, c("chrom", "start", "stop", "score")]
+         colnames(tbl.tfbs) <- c("chr", "start", "end", "value")
+         colorNumber <- (colorNumber %% totalColorCount) + 1
+         color <- colors[colorNumber]
+         loadBedGraphTrack(session, tf, tbl.tfbs, color=color, trackHeight=25, autoscale=FALSE, min=0, max=20)
+         } # for tf
+      #tbl.bs <- switch(modelName, "transcript.1.model" = tbl.bindingSites.1,
+      #                            "transcript.2.model" = tbl.bindingSites.2,
+      #                            "both.transcript.models" = rbind(tbl.bindingSites.1, tbl.bindingSites.2))
+      #transcript.number <- switch(modelName, "transcript.1.model" = ".1",
+      #                                       "transcript.2.model" = ".2",
+      #                                       "both.transcript.models" = "")
+      #tbl.bs <- tbl.bs[, c("chrom", "start", "stop", "score", "motif", "geneSymbol")]
+      #colnames(tbl.bs) <- c("chr", "start", "end", "value", "sampleID", "geneSymbol")
+      #printf("loadingBedGraphTrack, dim: %d %d", nrow(tbl.bs), ncol(tbl.bs))
+      #myFunc <- function(){
+      #   printf("entering myFunc, rows in tbl: %d", nrow(tbl.bs));
+      #   tfs <- sort(unique(tbl.bs$geneSymbol))
+      #   printf(" %d tfs", length(tfs))
+      #   for(tf in tfs){
+      #      colorNumber <<- (colorNumber + 1) %% totalColorCount
+      #      tbl.bs.sub <- subset(tbl.bs, geneSymbol==tf)
+      #      printf("new tf '%s', %d rows", tf, nrow(tbl.bs.sub))
+      #      track.name <- sprintf("%s%s", tf, transcript.number)
+      #      loadBedGraphTrack(session, track.name, tbl.bs.sub, color=colors[colorNumber], trackHeight=30)
+      #      } # for tf
+      #   }
+      #  # myFunc <- function() loadBedGraphTrack(session, modelName, tbl.bs, color=colors[colorNumber], trackHeight=30)
       updateTabsetPanel(session, "trenaTabs", select="igvTab");
         # allow time for the igv tab to be displayed
-      later(myFunc, delay=1);
+      #later(myFunc, delay=1);
+      })
+
+   observeEvent(input$dhs.threshold, {
+      dhs.threshold <- isolate(input$dhs.threshold)
+      printf(" --- dhs threshold changed, redraw peaks: %f", dhs.threshold)
+      x <- findRegionsAboveThreshold(tbl.buds.dhs$value, dhs.threshold, 10)
+      tbl.peaks <- with(x, data.frame(chr=rep("chr2", length(starts)), start=starts, end=ends, stringsAsFactors=FALSE))
+      printf("tbl.peaks rows: %d", nrow(tbl.peaks))
+      tbl.peaks$start <- tbl.peaks$start + tbl.buds.dhs$start[1]
+      tbl.peaks$end <- tbl.peaks$end + tbl.buds.dhs$start[1]
+      updateTabsetPanel(session, "trenaTabs", select="igvTab")
+      myFunc <- function() loadBedTrack(session, "dhs peaks", tbl.peaks, color="darkGreen", trackHeight=25)
+      later(myFunc, delay=0.5);
       })
 
    output$igvShiny <- renderIgvShiny({
@@ -182,8 +217,8 @@ server <- function(input, output, session) {
       printf("--- input$geneModelTable_cell_clicked: %s", trueRowClick)
       if(trueRowClick){
          selectedTableRow <- input$geneModelTable_row_last_clicked
+         printf("selectedTableRow: %d", selectedTableRow)
          if(!is.null(selectedTableRow)){
-            tbl.model <- state$currentModel
             tf <- tbl.model$gene[selectedTableRow]
             printf("selected tf to plot: %s", tf)
             later(function(){selectRows(dt.proxy, NULL)}, 0.01);
@@ -197,7 +232,7 @@ server <- function(input, output, session) {
 
 } # server
 #----------------------------------------------------------------------------------------------------
-plotTfTargetGeneCorrelation <- function(session, tf, expression.matrix.id)
+plotTfTargetGeneCorrelation <- function(session, tf)
 {
    printf("want an xyplot of %s vs. FRD3 (%s)", tf, orf)
    plot(mtx[tf, ], mtx[orf, ],main="Gene Expression",
@@ -205,6 +240,41 @@ plotTfTargetGeneCorrelation <- function(session, tf, expression.matrix.id)
 
 } # plotTfTargetGeneCorrelation
 #----------------------------------------------------------------------------------------------------
+findRegionsAboveThreshold <- function(vec, threshold, minSpan)
+{
+   vec[vec < threshold] <- NA
+   vec[vec >= threshold] <- 1
+   vec.rle <- rle(vec)
+   rle.segments.above.threshold <- which(vec.rle$lengths >= minSpan)
+       # make all runs less than desired.minSpan are NA'd
+   all.subMinimumSpans <- setdiff(1:length(vec.rle$values), rle.segments.above.threshold)
+   vec.rle$values[all.subMinimumSpans] <- NA    # vec.rle$values[18] <- NA
+
+   rle.region.count <- length(vec.rle$values)
+   actual.index <- 1
+
+   peak.starts <- vector("numeric", length(vec))
+   peak.ends <- vector("numeric", length(vec))
+   peak.count <- 0
+
+   for(i in 1:rle.region.count){
+      size <- vec.rle$length[i]
+      value <- vec.rle$values[i]
+      if(!is.na(value)){
+         peak.count <- peak.count + 1
+         region.start <- actual.index
+         region.end   <- actual.index + size - 1
+        #printf("peak found:  %d-%d", region.start, region.end)
+         peak.starts[peak.count] <- region.start
+         peak.ends[peak.count] <- region.end
+         } # !is.na
+    actual.index <- actual.index + size
+    } # for i
+
+   list(starts=peak.starts[seq_len(peak.count)], ends=peak.ends[seq_len(peak.count)])
+
+} # findRegionsAboveThreshold
+#------------------------------------------------------------------------------------------------------------------------
 shinyOptions <- list()
 
 if(Sys.info()[["nodename"]] == "trena.systemsbiology.net"){
