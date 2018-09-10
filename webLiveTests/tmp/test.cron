@@ -1,0 +1,3 @@
+*/5 * * * * /bin/bash /users/paul/github/trenaShinyApps/upTests/appList/runTest.sh  >> /users/paul/github/trenaShinyApps/upTests/appList/cron.log 2>&1
+
+
