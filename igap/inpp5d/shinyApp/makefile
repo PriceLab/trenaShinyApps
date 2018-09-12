@@ -14,3 +14,5 @@ bash:
 dockerRun:
 	docker run -p 60042:3838 inpp5dshinyapp
 
+dockerView:
+	open http://localhost:60042

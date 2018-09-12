@@ -4,6 +4,7 @@ library(FimoClient)
 library(trena)   # for motifMatcher, which obtains sequence
 library(RUnit)
 library(igvR)
+library(GenomicRanges)
 #------------------------------------------------------------------------------------------------------------------------
 FIMO_HOST <- "localhost"
 FIMO_PORT <- 5558
@@ -99,13 +100,14 @@ run <- function()
    tbl.fimo$stop <-  tbl.fimo$stop + tbl.regionMax$start
    tbl.fimo$pScore <- -log10(tbl.fimo$p.value)
    dim(tbl.fimo)
-   dim(subset(tbl.fimo, pScore >= -log10(0.01)))
+   tbl.fimo <- subset(tbl.fimo,  pScore >= -log10(0.01))
+   dim(tbl.fimo)   # 145k
    tbl.fimo$chrom <- chromosome
 
    tfs <- as.character(pfm.map[tbl.fimo$motif])
    checkEquals(length(tfs), nrow(tbl.fimo))
    tbl.fimo$tf <- tfs
-   dim(tbl.fimo)   # 6089 x 12
+   dim(tbl.fimo)   # 145k x 12
    tbl.fimo <- tbl.fimo[, c("chrom", "start", "stop", "strand", "motif", "tf", "score", "pScore", "p.value", "q.value", "matched.sequence")]
    tbl.fimo <- tbl.fimo[order(tbl.fimo$start, decreasing=FALSE),]
    gr.fimo <- GRanges(tbl.fimo)   # save this for below

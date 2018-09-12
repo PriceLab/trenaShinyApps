@@ -6,11 +6,20 @@ library(GenomicRanges)
 library(later)
 library(MotifDb)
 library(RUnit)
+library(RColorBrewer)
+
 #----------------------------------------------------------------------------------------------------
+totalColorCount <- 6
+colors <- brewer.pal(totalColorCount, "Dark2")
+colorNumber <- 0
+#----------------------------------------------------------------------------------------------------
+
 targetGene <- "INPP5D"
 load("data/tbl.model.RData")                      # "tbl.model"
 load("data/mtx.withDimers.cer.ros.tcx.RData")     # "mtx.cer" "mtx.ros" "mtx.tcx"
 load("data/tbl.enhancers.RData")                  # "tbl.enhancers"
+
+genome.name <- "hg38"
 
 loc.min <- min(tbl.enhancers$start) - 2000
 loc.max <-  max(tbl.enhancers$end) + 2000
@@ -18,12 +27,13 @@ chromosome <- tbl.enhancers$chr[1]
 
 load("data/tbl.gwas.igap.snp.RData")              # "tbl.snp"
 tbl.snp <- subset(tbl.snp, chrom==chromosome & start >= loc.min & end <= loc.max)
-load("data/tbl.enhancer.gwas.igap.snp.RData")     # "tbl.enhancer.snps"
-load("data/tbl.breaks.RData")                     # "tbl.breaks"
-load("data/tbl.breaksBed.RData")                  # "tbl.breaksBed"
+load("data/tbl.enhancer.gwas.igap.snp.RData")     # tbl.enhancer.snps
+load("data/tbl.breaks.RData")                     # tbl.breaks
+load("data/tbl.breaksBed.RData")                  # tbl.breaksBed
 load("data/tbl.fimo.5tfs.bindingSites.RData")     # tbl.fimo
-
-#load("dhs.RData") # tbl.dhs
+load("data/tbl.chipSeqInModel.RData")             # tbl.chipSeqInModel
+load("data/tbl.fp.RData")
+load("data/tbl.dhs.RData")                        # tbl.dhs
 addResourcePath("tmp", "tmp") # so the shiny webserver can see, and return track files for igv
 
 model.names <- "fp + enhancers"
@@ -69,11 +79,16 @@ ui <- fluidPage(
         #selectInput("geneModel", "Choose model:", models),
 
         selectInput("addTrack", "Add Track:",
-                   c(" - ",
+                   c("",
                      "Enhancers"="enhancers",
-                     "IGAP GWAS SNPs"="snps",
-                     "SNPs in Enhancers"="enhancer.snps",
-                     "Motif-breaking SNPs"="breaking.snps"
+                     "DHS open chromatin - encode clustered"="dhs",
+                     "ChIP-seq interleaved with footprints (4 TFs)"="chipSeqFootprints",
+                     "ChIP-seq"="chipSeq",
+                     "rs35349669"= "rs35349669",
+                     "IGAP GWAS SNPs"="snps"
+                     #"Footprints"="footprints"
+                     #"SNPs in Enhancers"="enhancer.snps",
+                     #"Motif-breaking SNPs"="breaking.snps"
                      )),
 
         sliderInput("IGAP.snp.significance", "SNP score",
@@ -98,7 +113,11 @@ ui <- fluidPage(
                     value = 10,
                     min = 0,
                     max = 100),
-        actionButton("showSNPsNearBindingSitesButton", "SNPs near binding sites in enhancer regions")
+        actionButton("showSNPsNearBindingSitesButton", "SNPs near binding sites in enhancer regions"),
+        HTML("<br>"),
+        #actionButton("addAllBindingSitesButton", "Add TF binding sites from regulatory model"),
+        #HTML("<br>"),
+        actionButton("removeOptionalTracks", "Remove tracks")
      ),
 
      mainPanel(
@@ -141,6 +160,7 @@ server <- function(input, output, session) {
     # has reactive children  plot, summary, table, below, which mention it
     # thereby establishing the reactive chain.
 
+
    observeEvent(input$trackClick, {
       printf("browser snp click observed!")
       print(input$trackClick)
@@ -169,6 +189,13 @@ server <- function(input, output, session) {
          } # if tfbs-snp
       })
 
+   observeEvent(input$addAllBindingSitesButton, ignoreInit=TRUE,{
+      addAllBindingSites(session)
+     })
+
+   observeEvent(input$removeOptionalTracks, ignoreInit = TRUE, {
+      removeUserAddedTracks(session)
+      })
 
    observeEvent(input$geneModel, {
       printf("geneModel event: %s", input$geneModel);
@@ -202,8 +229,10 @@ server <- function(input, output, session) {
 
    observeEvent(input$addTrack, {
       newTrackName <- input$addTrack
+      if(newTrackName == "") return()
       printf(" addTrack event: %s", newTrackName);
       displayTrack(session, newTrackName)
+      later(function() {updateSelectInput(session, "addTrack", selected=character(0))}, 1)
       })
 
    observeEvent(input$findDisruptiveSNPsButton, {
@@ -248,47 +277,7 @@ server <- function(input, output, session) {
      })
 
    observeEvent(input$showSNPsNearBindingSitesButton, {
-      shoulder <- isolate(input$snpShoulder)
-      snpSignificanceThreshold <- isolate(session$input$IGAP.snp.significance)
-      tbl.snpFiltered <- subset(tbl.snp, pScore >= snpSignificanceThreshold)
-      motifMatchThreshold <- isolate(session$input$fimo.motif.significance)
-      tbl.tfbs <- subset(tbl.fimo, motif.pScore >= motifMatchThreshold)
-      tbl.tfbs <- tbl.tfbs[, c("chrom", "motifStart", "motifEnd", "motif.pVal", "motifName", "motif.pScore")]
-      tbl.tfbs <- tbl.tfbs[, c("chrom", "motifStart", "motifEnd", "motif.pScore", "motifName")]
-      colnames(tbl.tfbs) <- c("chrom", "start", "end", "score", "motifName")
-      tbl.snpsNearEnough <- data.frame()
-      gr.snps <- GRanges(tbl.snp)
-      gr.tfbs <- GRanges(data.frame(chrom=tbl.tfbs$chrom,
-                                    start=tbl.tfbs$start - shoulder,
-                                    end=tbl.tfbs$end+shoulder))
-      tbl.ov <- as.data.frame(findOverlaps(gr.snps, gr.tfbs))
-      colnames(tbl.ov) <- c("snp", "tfbs")
-      tbl.snpsNearEnough <- tbl.snp[tbl.ov$snp, c("chrom", "start", "end", "rsid")]
-      motifNames <- tbl.tfbs$motifName[tbl.ov$tfbs]
-      tbl.snpsNearEnough$motifName <- motifNames
-      #gr.eqtl <- GRanges(tbl.eqtl)
-      #tbl.ov <- as.data.frame(findOverlaps(gr.eqtl, gr.tfbs))
-      #colnames(tbl.ov) <- c("snp", "tfbs")
-      #motifNames <- tbl.tfbs$motifName[tbl.ov$tfbs]
-      #tbl.new <- tbl.eqtl[tbl.ov$snp, c("chrom", "start", "end", "rsid")]
-      #tbl.new$motifName <- motifNames
-      #tbl.snpsNearEnough <- rbind(tbl.snpsNearEnough, tbl.new)
-      rownames(tbl.snpsNearEnough) <- NULL
-      tbl.snpsNearEnough <- unique(tbl.snpsNearEnough)
-      tbl.snpsNearEnough$name <- with(tbl.snpsNearEnough, paste(rsid, motifName, sep=":"))
-      tbl.snpsNearEnough <- tbl.snpsNearEnough[, c("chrom", "start", "end", "name")]
-      temp.filename <- tempfile(tmpdir="tmp", fileext=".bed")
-      write.table(tbl.snpsNearEnough, sep="\t", row.names=FALSE, col.names=FALSE, quote=FALSE, file=temp.filename)
-
-      updateTabsetPanel(session, "trenaTabs", select="igvTab");
-      later(function(){
-         session$sendCustomMessage(type="displayBedTrack",
-                                   message=(list(filename=temp.filename,
-                                                 trackName="nearby snps",
-                                                 displayMode="EXPANDED",
-                                                 color="red",
-                                                 trackHeight=40)))
-         }, 1)
+      displaySNPsNearBindingSites(session)
       })
 
    observeEvent(input$geneModelTable_rows_selected, {
@@ -333,7 +322,8 @@ server <- function(input, output, session) {
     options=list(pageLength=25, dom="t"))
 
    output$igvShiny <- renderIgvShiny({
-     igvShiny(list(roi="chr2:233,027,632-233,264,596"))
+     igvShiny(list(genomeName=genome.name,
+                   initialLocus="chr2:233,027,632-233,264,596"))
      })
 
   } # server
@@ -343,7 +333,11 @@ displayTrack <- function(session, trackName)
 {
    supportedTracks <- c("enhancers",
                         "dhs",
+                        "chipSeqFootprints",
+                        "chipSeq",
+                        "rs35349669",
                         "snps",
+                        "footprints",
                         "enhancer.snps",
                         "breaking.snps")
 
@@ -352,49 +346,108 @@ displayTrack <- function(session, trackName)
    if(!trackName %in% supportedTracks)
       return()
 
+   if(trackName == "chipSeq"){
+      displayChipSeqByTF(session)
+      return()
+      }
+
+   if(trackName == "chipSeqFootprints"){
+      displayInterleavedCHiPseqAndFootprints(session)
+      return()
+      }
+
+   if(trackName == "footprints"){
+      displayFootprintsByTF(session)
+      return()
+      }
 
    x <- switch(trackName,
       enhancers       = {list(bed=tbl.enhancers,        name="INPP5D enhancers",   color="black")},
-      dhs             = {list(bed=tbl.dhs,              name="DHS",                color="darkgray")},
+      dhs             = {list(bedgraph=tbl.dhs,         name="DHS",                color="blue")},
       snps            = {list(bedgraph=tbl.snp,         name="GWAS snp",           color="darkRed")},
       enhancer.snps   = {list(bed=tbl.enhancer.snps,    name="Enhancer snp",       color="darkRed")},
-      breaking.snps   = {list(bed=tbl.breaksBed,        name="Motif-breaking snp", color="maroon")}
+      breaking.snps   = {list(bed=tbl.breaksBed,        name="Motif-breaking snp", color="maroon")},
+      rs35349669      = {list(bed=data.frame(chr="chr2",
+                                             start=233159830,
+                                             end=233159830,
+                                             name="rs35349669",
+                                             stringsAsFactors=FALSE),
+                              name="rs35349669",
+                              color="purple")}
       )
 
     updateTabsetPanel(session, "trenaTabs", select="igvTab");
 
     if(trackName == "snps"){
-       temp.filename <- tempfile(tmpdir="tmp", fileext=".bed")
-       printf("writing %d rows to %s", nrow(x$bedgraph), temp.filename)
-       write.table(x$bedgraph[, c("chrom", "start", "end", "pScore")], sep="\t",
-                              row.names=FALSE, col.names=FALSE, quote=FALSE, file=temp.filename)
-       later(function(){
-          session$sendCustomMessage(type="displayBedGraphTrack",
-                                    message=(list(filename=temp.filename,
-                                                  trackName=x$name,
-                                                  displayMode="EXPANDED",
-                                                  color=x$color,
-                                                  minValue=0,
-                                                  maxValue=8,
-                                                  trackHeight=40)))
-          }, 1)
-        } # bedGraph for snps
+       tbl.tmp <- x$bedgraph[, c("chrom", "start", "end", "pScore")]
+       loadBedGraphTrack(session, "GWAS snp", tbl.tmp, color=x$color, trackHeight=25, autoscale=FALSE, min=0, max=10)
+       } # bedGraph for snps
 
-    if(trackName %in% c("enhancers", "dhs", "enhancer.snps", "breaking.snps")){
-       temp.filename <- tempfile(tmpdir="tmp", fileext=".bed")
-       printf("writing %d rows to %s", nrow(x$bed), temp.filename)
-       write.table(x$bed, sep="\t", row.names=FALSE, col.names=FALSE, quote=FALSE, file=temp.filename)
-       later(function(){
-                session$sendCustomMessage(type="displayBedTrack",
-                                          message=(list(filename=temp.filename,
-                                                        trackName=x$name,
-                                                        displayMode="EXPANDED",
-                                                        color=x$color,
-                                                        trackHeight=40)))
-             }, 1)
+    if(trackName == "dhs"){
+       loadBedGraphTrack(session, "DHS", x$bedgraph, color=x$color, trackHeight=25, autoscale=TRUE)
+       } # bedGraph for snps
+
+    if(trackName == "enhancers"){
+       tbl.tmp <- tbl.enhancers[, c("chr", "start", "end", "score")]
+       loadBedGraphTrack(session, "GeneHancer", tbl.tmp, color="black", trackHeight=25, autoscale=FALSE, min=0, max=20)
+       } # bedGraph for snps
+
+   if(trackName %in% c("enhancer.snps", "breaking.snps", "chipSeq", "rs35349669", "spi1.footprints")){
+       loadBedTrack(session, trackName, x$bed, color=x$color, trackHeight=30)
        } # bed format track
 
 } # displayTrack
+#------------------------------------------------------------------------------------------------------------------------
+displayChipSeqByTF <- function(session)
+{
+   colors <- brewer.pal(8, "Dark2")
+   totalColorCount <- length(colors)
+   colorNumber <- 0
+
+   for(gene in unique(tbl.csInModel$tf)){
+      tbl.broad <- subset(tbl.csInModel, tf==gene)[, c("chr", "start", "end")]
+      tbl.peak <- subset(tbl.csInModel, tf==gene)[, c("chr", "peakStart", "peakEnd")]
+      colnames(tbl.peak) <- c("chr", "start", "end")
+      colorNumber <- (colorNumber %% totalColorCount) + 1
+      color <- colors[colorNumber]
+      loadBedTrack(session, sprintf("%s ChIP", gene), tbl.broad, color=color, trackHeight=25)
+      # loadBedTrack(session, sprintf("%s peak", gene), tbl.peak, color=color, trackHeight=25)
+      } # for tf
+
+} # displayChipSeqByTF
+#------------------------------------------------------------------------------------------------------------------------
+displayInterleavedCHiPseqAndFootprints <- function(session)
+{
+   colors <- brewer.pal(8, "Dark2")
+   totalColorCount <- length(colors)
+   colorNumber <- 0
+
+   for(gene in unique(tbl.csInModel$tf)){
+      tbl.broad <- subset(tbl.csInModel, tf==gene)[, c("chr", "start", "end")]
+      colorNumber <- (colorNumber %% totalColorCount) + 1
+      color <- colors[colorNumber]
+      loadBedTrack(session, sprintf("%s ChIP", gene), tbl.broad, color=color, trackHeight=25)
+      tbl.bed <- subset(tbl.fp, tf==gene)[, c("chr", "start", "end")]
+      loadBedTrack(session, sprintf("%s fp", gene), tbl.bed, color=color, trackHeight=25)
+      } # for tf
+
+
+} # displayInterleavedCHiPseqAndFootprints
+#------------------------------------------------------------------------------------------------------------------------
+displayFootprintsByTF <- function(session)
+{
+   colors <- brewer.pal(8, "Dark2")
+   totalColorCount <- length(colors)
+   colorNumber <- 0
+
+   for(gene in unique(tbl.fp$tf)){
+      tbl.bed <- subset(tbl.fp, tf==gene)[, c("chr", "start", "end")]
+      colorNumber <- (colorNumber %% totalColorCount) + 1
+      color <- colors[colorNumber]
+      loadBedTrack(session, sprintf("%s fp", gene), tbl.bed, color=color, trackHeight=25)
+      } # for tf
+
+} # displayFootprintsByTF
 #------------------------------------------------------------------------------------------------------------------------
 findDisruptiveSNPs <- function(snpSignificanceThreshold, motifMatchThreshold, bindingLossThreshold)
 {
@@ -426,6 +479,8 @@ test_findDisruptiveSNPs <- function()
 #------------------------------------------------------------------------------------------------------------------------
 displayDisruptiveSnps <- function(session, tbl.disruptions)
 {
+   printf("--- displayDisruptiveSnps");
+
    coi <- c("chrom", "start", "end", "motifName", "tf", "motifScore", "rsid")
    tbl.condensed <- tbl.disruptions[, coi]
    tfs <- unique(tbl.condensed$tf)
@@ -567,6 +622,62 @@ plotTfTargetGeneCorrelation <- function(session, tf, expression.matrix.id)
 
 } # plotTfTargetGeneCorrelation
 #------------------------------------------------------------------------------------------------------------------------
+displaySNPsNearBindingSites <- function(session)
+{
+   shoulder <- isolate(session$input$snpShoulder)
+   snpSignificanceThreshold <- isolate(session$input$IGAP.snp.significance)
+   motifMatchThreshold <- isolate(session$input$fimo.motif.significance)
+
+   printf("--- displaySNPsNearBindingSites")
+   printf("shoulder: %d", shoulder)
+   printf("snpSig: %f", snpSignificanceThreshold)
+   printf("motif match: %f", motifMatchThreshold)
+
+   tbl.snpFiltered <- subset(tbl.snp, pScore >= snpSignificanceThreshold)
+   if(nrow(tbl.snpFiltered) == 0){
+      printf("no snps above pScore threshold")
+      return()
+      }
+
+   tbl.tfbs <- subset(tbl.fimo, motif.pScore >= motifMatchThreshold)
+   if(nrow(tbl.tfbs) == 0){
+      printf("no binding sites above fimoe threshold")
+      return()
+      }
+
+   tbl.tfbs <- tbl.tfbs[, c("chrom", "motifStart", "motifEnd", "motif.pScore", "motifName")]
+   colnames(tbl.tfbs) <- c("chrom", "start", "end", "score", "motifName")
+   tbl.snpsNearEnough <- data.frame()
+   gr.snps <- GRanges(tbl.snp)
+   gr.tfbs <- GRanges(data.frame(chrom=tbl.tfbs$chrom,
+                                 start=tbl.tfbs$start - shoulder,
+                                 end=tbl.tfbs$end+shoulder))
+   tbl.ov <- as.data.frame(findOverlaps(gr.snps, gr.tfbs))
+   if(nrow(tbl.ov) == 0){
+      printf("no snps near binding sites")
+      return()
+      }
+
+   colnames(tbl.ov) <- c("snp", "tfbs")
+   tbl.snpsNearEnough <- tbl.snp[tbl.ov$snp, c("chrom", "start", "end", "rsid")]
+   motifNames <- tbl.tfbs$motifName[tbl.ov$tfbs]
+   tbl.snpsNearEnough$motifName <- motifNames
+   rownames(tbl.snpsNearEnough) <- NULL
+   tbl.snpsNearEnough <- unique(tbl.snpsNearEnough)
+   tbl.snpsNearEnough$name <- with(tbl.snpsNearEnough, paste(rsid, motifName, sep=":"))
+   tbl.snpsNearEnough <- tbl.snpsNearEnough[, c("chrom", "start", "end", "name")]
+
+   loadBedTrack(session, "snps near binding site", tbl.snpsNearEnough, color="brown", trackHeight=25)
+
+} # displaySNPsNearBindingSites
+#------------------------------------------------------------------------------------------------------------------------
+addAllBindingSites <- function(session)
+{
+   printf("addBindingSites - disabled for now")
+
+} # addAllTFbindingSites
+#------------------------------------------------------------------------------------------------------------------------
+
 shinyOptions <- list()
 
 if(Sys.info()[["nodename"]] == "trena.systemsbiology.net"){
