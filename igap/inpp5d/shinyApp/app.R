@@ -30,6 +30,7 @@ tbl.snp <- subset(tbl.snp, chrom==chromosome & start >= loc.min & end <= loc.max
 load("data/tbl.enhancer.gwas.igap.snp.RData")     # tbl.enhancer.snps
 load("data/tbl.breaks.RData")                     # tbl.breaks
 load("data/tbl.breaksBed.RData")                  # tbl.breaksBed
+colnames(tbl.breaksBed)[4] <- "id"                # used by igvShiny.  TODO - rationalize this! (13 sep 2018)
 load("data/tbl.fimo.5tfs.bindingSites.RData")     # tbl.fimo
 load("data/tbl.chipSeqInModel.RData")             # tbl.chipSeqInModel
 load("data/tbl.fp.RData")
@@ -85,10 +86,10 @@ ui <- fluidPage(
                      "ChIP-seq interleaved with footprints (4 TFs)"="chipSeqFootprints",
                      "ChIP-seq"="chipSeq",
                      "rs35349669"= "rs35349669",
-                     "IGAP GWAS SNPs"="snps"
+                     "IGAP GWAS SNPs"="snps",
                      #"Footprints"="footprints"
                      #"SNPs in Enhancers"="enhancer.snps",
-                     #"Motif-breaking SNPs"="breaking.snps"
+                     "Motif-breaking SNPs"="breaking.snps"
                      )),
 
         sliderInput("IGAP.snp.significance", "SNP score",
@@ -102,13 +103,13 @@ ui <- fluidPage(
                     min = 0,
                     max = 12,
                     round=-2),
+        actionButton("findDisruptiveSNPsButton", "SNPs which disrupt TF binding sites"),
         # sliderInput("fimo.snp.effect", "SNP binding affinity loss score",
         #              value = 0.5,
         #              step=0.1,
         #              min = 0,
         #              max = 12),
-        # actionButton("findDisruptiveSNPsButton", "SNPs which disrupt TF binding sites"),
-        # HTML("<br><br><br>"),
+        HTML("<br>"),
         sliderInput("snpShoulder", "Proximity",
                     value = 10,
                     min = 0,
@@ -116,7 +117,7 @@ ui <- fluidPage(
         actionButton("showSNPsNearBindingSitesButton", "SNPs near binding sites in enhancer regions"),
         HTML("<br>"),
         #actionButton("addAllBindingSitesButton", "Add TF binding sites from regulatory model"),
-        #HTML("<br>"),
+        HTML("<br>"),
         actionButton("removeOptionalTracks", "Remove tracks")
      ),
 
@@ -455,7 +456,7 @@ findDisruptiveSNPs <- function(snpSignificanceThreshold, motifMatchThreshold, bi
    printf("  snpSignificanceThreshold: %5.1f", snpSignificanceThreshold)
    printf("  motifMatchThreshold: %5.1f",      motifMatchThreshold)
    printf("  bindingLossThreshold: %5.1f",     bindingLossThreshold);
-   #browser()
+   browser()
    tbl.tmp <- subset(tbl.bs,  -log10(gwasPval) >= snpSignificanceThreshold |
                               -log10(eqtlPval) >= snpSignificanceThreshold)
    tbl.out <- subset(tbl.tmp,
