@@ -110,6 +110,7 @@ ui <- fluidPage(
         #              min = 0,
         #              max = 12),
         HTML("<br>"),
+        HTML("<br>"),
         sliderInput("snpShoulder", "Proximity",
                     value = 10,
                     min = 0,
