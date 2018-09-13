@@ -103,13 +103,12 @@ ui <- fluidPage(
                     min = 0,
                     max = 12,
                     round=-2),
-        actionButton("findDisruptiveSNPsButton", "SNPs which disrupt TF binding sites"),
+        # actionButton("findDisruptiveSNPsButton", "SNPs which disrupt TF binding sites"),
         # sliderInput("fimo.snp.effect", "SNP binding affinity loss score",
         #              value = 0.5,
         #              step=0.1,
         #              min = 0,
         #              max = 12),
-        HTML("<br>"),
         HTML("<br>"),
         sliderInput("snpShoulder", "Proximity",
                     value = 10,
@@ -458,13 +457,13 @@ findDisruptiveSNPs <- function(snpSignificanceThreshold, motifMatchThreshold, bi
    printf("  motifMatchThreshold: %5.1f",      motifMatchThreshold)
    printf("  bindingLossThreshold: %5.1f",     bindingLossThreshold);
    browser()
-   tbl.tmp <- subset(tbl.bs,  -log10(gwasPval) >= snpSignificanceThreshold |
-                              -log10(eqtlPval) >= snpSignificanceThreshold)
-   tbl.out <- subset(tbl.tmp,
-                     -log10(motif.pVal )   >= motifMatchThreshold &
-                     wtMutMatchDelta       >= bindingLossThreshold)
-   printf("snps meet criteria: %d", nrow(tbl.out))
-   tbl.out
+   #tbl.tmp <- subset(tbl.bs,  -log10(gwasPval) >= snpSignificanceThreshold |
+   #                           -log10(eqtlPval) >= snpSignificanceThreshold)
+   #tbl.out <- subset(tbl.tmp,
+   #                  -log10(motif.pVal )   >= motifMatchThreshold &
+   #                  wtMutMatchDelta       >= bindingLossThreshold)
+   #rintf("snps meet criteria: %d", nrow(tbl.out))
+   data.frame()
 
 } # findDisruptiveSNPs
 #------------------------------------------------------------------------------------------------------------------------
