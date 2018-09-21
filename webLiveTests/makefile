@@ -1,4 +1,4 @@
-TIMEOUT = 6000
+TIMEOUT = 12000
 
 all: flaskServer chia cellphonesim inpp5d frd3 ireg1
 
