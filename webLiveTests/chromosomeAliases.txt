@@ -1,0 +1,7 @@
+1	Chr1	CHR1	chr1
+2	Chr2	CHR2	chr2
+3	Chr3	CHR3	chr3
+4	Chr4	CHR4	chr4
+5	Chr5	CHR5	chr5
+C	ChrC	CHRC	chrc
+M	ChrM	CHRM	chrm

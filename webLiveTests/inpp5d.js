@@ -7,7 +7,7 @@ test('launch INPP5D app', async function foo(t){
 
     const launchAppLink = Selector("a").withText("trena INPP5D");
     const launchingNotification = Selector("span").withText("trena INPP5D");
-    const igvPresentInIframe = Selector("body > div > h2").withText("INPP5D Trena Model & Disruptions");
+    const igvPresentInIframe = Selector("body > div > h2"); // .withText("INPP5D Trena Model & Disruptions");
     const igvCurrentGenomeDiv = Selector("div.igv-current_genome");
     //const igvCurrentGenomeDiv = Selector("#igv-current_genome");
 
