@@ -1,0 +1,49 @@
+library(trenaSGM)
+library(org.Hs.eg.db)
+library(RUnit)
+
+geneSymbol <- "TSNARE1"
+ensg       <- "ENSG00000171045"
+
+if(!exists("mtx.ensembl")){
+   print(load(system.file(package="trenaSGM", "extdata", "mayo.tcx.RData")))
+   all.genes <- rownames(mtx)
+   suppressMessages(tbl.map <- select(org.Hs.eg.db, keys=all.genes, keytype="SYMBOL", columns="ENSEMBL"))
+   dups <- which(duplicated(tbl.map$SYMBOL))
+   if(length(dups) > 0)
+      tbl.map <- tbl.map[-dups,]
+   checkTrue(all(tbl.map$SYMBOL %in% rownames(mtx)))
+   mtx.ensembl <- mtx[tbl.map$SYMBOL,]
+   indices <- match(tbl.map$SYMBOL, rownames(mtx.ensembl))
+   rownames(mtx.ensembl) <- tbl.map$ENSEMBL[indices]
+   deleters <- which(is.na(rownames(mtx.ensembl)))
+   if(length(deleters) > 0)
+       mtx.ensembl <- mtx.ensembl[-deleters,]
+   }
+
+fivenum(mtx.ensembl[ensg,]) #  -2.863927071 -0.644947474 -0.002252291  0.669473757  2.284163208
+fivenum(mtx.ensembl)        #  -5.007305620 -0.667822487  0.006868843  0.681022834  4.315402801
+
+shoulder <- 50000
+tbl.regions <- data.frame(chrom=chromosome,
+                          start=min(tbl.enhancers$start) - shoulder,
+                          end=max(tbl.enhancers$end) + shoulder,
+                          stringsAsFactors=FALSE)
+
+build.spec <- list(title="bigRegion",
+                   type="footprint.database",
+                   regions=tbl.enhancers,    # 16kb
+                   geneSymbol=ensg,
+                   tss=tss,
+                   matrix=mtx.ensembl,
+                   db.host="khaleesi.systemsbiology.net",
+                   databases=list("brain_hint_20", "brain_hint_16", "brain_wellington_20", "brain_wellington_16"),
+                   motifDiscovery="builtinFimo",
+                   annotationDbFile=dbfile(org.Hs.eg.db),
+                   tfPool=allKnownTFs(identifierType="ensemblGeneID"),
+                   tfMapping="MotifDB",
+                   tfPrefilterCorrelation=0.2,
+                   orderModelByColumn="rfScore",
+                   solverNames=c("lasso", "lassopv", "pearson", "randomForest", "ridge", "spearman"))
+builder <- FootprintDatabaseModelBuilder(genome, ensg, build.spec, quiet=FALSE)
+x <- build(builder)
