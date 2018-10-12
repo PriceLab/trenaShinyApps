@@ -43,51 +43,61 @@ combineGeneNames <- function(ensemblIDs)
 totalColorCount <- 6
 colors <- brewer.pal(totalColorCount, "Dark2")
 colorNumber <- 0
-#----------------------------------------------------------------------------------------------------
-ui <- fluidPage(
+#------------------------------------------------------------------------------------------------------------------------
+createUI <- function()
+{
+  ui <- fluidPage(
+     tags$script(JS('setInterval(function(){console.log("keepAlive"); Shiny.setInputValue("foo", "var");}, 1 * 60 * 1000)')),
+     titlePanel(sprintf("%s Trena Model & Disruptions", targetGene$hugo)),
 
-  tags$script(JS('setInterval(function(){console.log("keepAlive"); Shiny.setInputValue("foo", "var");}, 1 * 60 * 1000)')),
-  titlePanel(sprintf("%s Trena Model & Disruptions", targetGene$hugo)),
+     sidebarLayout(
+        sidebarPanel(
+           width=2,
+           selectInput("displayGenomicRegion", "Display Genomic Region:",
+                       c("",
+                         "Tradtional Promoter" = "traditionalPromoter",
+                         "Enhancers Region" = "enhancersRegion")),
+           selectInput("addTrack", "Add Track:",
+                      c("",
+                        "Enhancers"="enhancers",
+                        "DHS open chromatin - encode clustered"="dhs"
+                        )),
+           HTML("<br>"),
+           actionButton("removeOptionalTracks", "Remove tracks")
+           ),  # sidebarPanel
 
-  sidebarLayout(
-     sidebarPanel(
-        width=2,
-        selectInput("displayGenomicRegion", "Display Genomic Region:",
-                    c("",
-                      "Tradtional Promoter" = "traditionalPromoter",
-                      "Enhancers Region" = "enhancersRegion")),
-        selectInput("addTrack", "Add Track:",
-                   c("",
-                     "Enhancers"="enhancers",
-                     "DHS open chromatin - encode clustered"="dhs"
-                     )),
-        HTML("<br>"),
-        actionButton("removeOptionalTracks", "Remove tracks")
-        ),
+        mainPanel(width=10,
+            tabsetPanel(type="tabs",
+                        id="trenaTabs",
+                        igvTabPanel(),
+                        tabPanel(title="Create new trena model",  value="geneModelTab",
+                             mainPanel(radioButtons("tfSelectionChoice", "Row (transcription factor) selection will display:",
+                                                    c("XY plot" = "xyPlot",
+                                                      "Binding sites" = "displayBindingSites"),
+                                                    inline=TRUE),
+                                       DTOutput("geneModelTable")
+                                       ))
+                        ) # tabsetPanel
+             ) # mainPanel
+         ) # sidebarLayout
+       ) # fluidPage
 
-     mainPanel(width=10,
-        tabsetPanel(type="tabs",
-                    id="trenaTabs",
-                    tabPanel(title="IGV", value="igvTab",
-                             fluidRow(
-                                column(8, igvShinyOutput('igvShiny')),
-                                column(4, sliderInput("obs", "Number of observations:", min = 1, max = 1000, value = 500))
-                                )),
-                    tabPanel(title="Create new trena model",  value="geneModelTab",
-                            mainPanel(radioButtons("tfSelectionChoice", "Row (transcription factor) selection will display:",
-                                                   c("XY plot" = "xyPlot",
-                                                     "Binding sites" = "displayBindingSites"),
-                                                   inline=TRUE),
-                                      DTOutput("geneModelTable")
-                                      ))
-                   ) # tabsetPanel
-      )  # mainPanel
-    ) # sidebarLayout
-  ) # fluidPage
+    return(ui)
 
-#--------------------------------------------------------------------------------
+} # createUI
+#------------------------------------------------------------------------------------------------------------------------
+igvTabPanel <- function()
+{
+   panel <- tabPanel(title="IGV", value="igvTab",
+                     fluidRow(
+                        column(8, igvShinyOutput('igvShiny')),
+                        column(4, sliderInput("obs", "Number of observations:", min = 1, max = 1000, value = 500))
+                     ))
+   return(panel)
+
+} # igvTabPanel
+#------------------------------------------------------------------------------------------------------------------------
 server <- function(input, output, session) {
-
 
    dt.proxy <- dataTableProxy("geneModelTable")
 
@@ -271,5 +281,6 @@ if(Sys.info()[["nodename"]] == "trena.systemsbiology.net"){
    printf("running on trena, using port %d", port)
    shinyOptions <- list(host="0.0.0.0", port=port, launch.browser=FALSE)
    }
-app <- shinyApp(ui=ui,server=server, options=shinyOptions)
+
+app <- shinyApp(ui=createUI(), server=server, options=shinyOptions)
 
