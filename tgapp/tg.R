@@ -70,13 +70,7 @@ createUI <- function()
             tabsetPanel(type="tabs",
                         id="trenaTabs",
                         igvTabPanel(),
-                        tabPanel(title="Create new trena model",  value="geneModelTab",
-                             mainPanel(radioButtons("tfSelectionChoice", "Row (transcription factor) selection will display:",
-                                                    c("XY plot" = "xyPlot",
-                                                      "Binding sites" = "displayBindingSites"),
-                                                    inline=TRUE),
-                                       DTOutput("geneModelTable")
-                                       ))
+                        createGeneModelPanel()
                         ) # tabsetPanel
              ) # mainPanel
          ) # sidebarLayout
@@ -96,6 +90,20 @@ igvTabPanel <- function()
    return(panel)
 
 } # igvTabPanel
+#------------------------------------------------------------------------------------------------------------------------
+createGeneModelPanel <- function()
+{
+
+   panel <- tabPanel(title="Create new trena model",  value="geneModelTab",
+                     mainPanel(radioButtons("tfSelectionChoice", "Row (transcription factor) selection will display:",
+                                   c("XY plot" = "xyPlot",
+                                     "Binding sites" = "displayBindingSites"),
+                                   inline=TRUE),
+                      DTOutput("geneModelTable")
+                      ))
+   return(panel)
+
+} # createGeneModelPanel
 #------------------------------------------------------------------------------------------------------------------------
 server <- function(input, output, session) {
 
