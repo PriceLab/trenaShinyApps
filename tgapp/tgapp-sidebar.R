@@ -7,23 +7,41 @@ library(later)
 library(MotifDb)
 library(RUnit)
 library(RColorBrewer)
-
+library(org.Hs.eg.db)
 library(shiny)
 library(shinydashboard)
 library(igvShiny)
 library(DT)
 
+library(trenaSGM)
 library(TrenaGene)
 library(TrenaGenePlacentaData)
+#------------------------------------------------------------------------------------------------------------------------
+combineGeneNames <- function(ensemblIDs)
+{
+   tbl.geneNameMapper <- select(org.Hs.eg.db, keys=ensemblIDs, keytype="ENSEMBL", columns="SYMBOL")
+   tbl.geneNameMapper$combined <- with(tbl.geneNameMapper, paste(ENSEMBL, SYMBOL, sep="|"))
+   dim(tbl.geneNameMapper); #dim(mtx)
+     # [1] 16831     3
+     # [1] 16664   112
+  dups <- which(duplicated(tbl.geneNameMapper$ENSEMBL)) # 167
+  if(length(dups) > 0)
+     tbl.geneNameMapper <- tbl.geneNameMapper[-dups,]
+  #dim(tbl.geneNameMapper); dim(mtx)
+   #rownames(mtx) <- tbl.geneNameMapper$combined
+   return(tbl.geneNameMapper)
 
-targetGene <- "PSG1"
-genome.name <- "hg38"
+} # combineGeneNames
+#------------------------------------------------------------------------------------------------------------------------
+targetGene <- list(hugo="PSG1", ensembl="ENSG00000231924", combined="ENSG00000231924|PSG1")
+genomeName <- "hg38"
 
 dataDirectory <- system.file(package="TrenaGenePlacentaData", "extdata")
 
-trenaGene <- TrenaGene(targetGene, genome.name, expressionDataDirectory=dataDirectory)
-
+trenaGene <- TrenaGene(targetGene$hugo, genomeName, expressionDataDirectory=dataDirectory)
 expression.data.set.names <- getExpressionMatrixNames(trenaGene)
+tbl.enhancers <- getEnhancers(trenaGene)
+tbl.dhs <- getEncodeDHS(trenaGene)
 
 
 #----------------------------------------------------------------------------------------------------
@@ -35,52 +53,21 @@ ui <- fluidPage(
 
   tags$script(JS('setInterval(function(){console.log("keepAlive"); Shiny.setInputValue("foo", "var");}, 1 * 60 * 1000)')),
 
-  titlePanel(sprintf("%s Trena Model & Disruptions", targetGene)),
+  titlePanel(sprintf("%s Trena Model & Disruptions", targetGene$hugo)),
 
   sidebarLayout(
      sidebarPanel(
         width=2,
         selectInput("displayGenomicRegion", "Display Genomic Region:",
-                    c("Tradtional Promoter" = "traditionalPromoter",
-                      "Wide" = "wide")),
+                    c("",
+                      "Tradtional Promoter" = "traditionalPromoter",
+                      "Enhancers Region" = "enhancersRegion")),
         selectInput("addTrack", "Add Track:",
                    c("",
                      "Enhancers"="enhancers",
                      "DHS open chromatin - encode clustered"="dhs",
-                     "ChIP-seq interleaved with footprints (4 TFs)"="chipSeqFootprints",
-                     "ChIP-seq"="chipSeq",
-                     "rs35349669"= "rs35349669",
-                     "IGAP GWAS SNPs"="snps",
-                     #"Footprints"="footprints"
-                     #"SNPs in Enhancers"="enhancer.snps",
-                     "Motif-breaking SNPs"="breaking.snps"
+                     "ChIP-seq"="chipSeq"
                      )),
-
-        sliderInput("IGAP.snp.significance", "SNP score",
-                    value = 4,
-                    step=0.1,
-                    min = 0,
-                    max = 12),
-        sliderInput("fimo.motif.significance", "FIMO motif score",
-                    value = 2, #fivenum(-log10(tbl.bs$motif.pVal))[3],
-                    step=0.1,
-                    min = 0,
-                    max = 12,
-                    round=-2),
-        # actionButton("findDisruptiveSNPsButton", "SNPs which disrupt TF binding sites"),
-        # sliderInput("fimo.snp.effect", "SNP binding affinity loss score",
-        #              value = 0.5,
-        #              step=0.1,
-        #              min = 0,
-        #              max = 12),
-        HTML("<br>"),
-        sliderInput("snpShoulder", "Proximity",
-                    value = 10,
-                    min = 0,
-                    max = 100),
-        actionButton("showSNPsNearBindingSitesButton", "SNPs near binding sites in enhancer regions"),
-        HTML("<br>"),
-        #actionButton("addAllBindingSitesButton", "Add TF binding sites from regulatory model"),
         HTML("<br>"),
         actionButton("removeOptionalTracks", "Remove tracks")
         ),
@@ -88,27 +75,18 @@ ui <- fluidPage(
      mainPanel(width=10,
         tabsetPanel(type="tabs",
                     id="trenaTabs",
-                    tabPanel(title="IGV",             value="igvTab",
+                    tabPanel(title="IGV", value="igvTab",
                              fluidRow(
                                 column(8, igvShinyOutput('igvShiny')),
                                 column(4, sliderInput("obs", "Number of observations:", min = 1, max = 1000, value = 500))
                                 )),
-                   #tabPanel(title="READ ME",         includeHTML("readme.html")),
-                   tabPanel(title="trena model",     value="geneModelTab",
+                    tabPanel(title="Create new trena model",  value="geneModelTab",
                             mainPanel(radioButtons("tfSelectionChoice", "Row (transcription factor) selection will display:",
                                                    c("XY plot" = "xyPlot",
                                                      "Binding sites" = "displayBindingSites"),
                                                    inline=TRUE),
                                       DTOutput("geneModelTable")
-                                      )),
-                   tabPanel(title="SNP", value="snpInfoTab",
-                            mainPanel(
-                               verbatimTextOutput("tfbsText"),
-                               DTOutput("snpMotifTable"),
-                               imageOutput("logoImage"),
-                               width=12)
-                            ),
-                   tabPanel(title="TF/INPP5D xy plot",  value="plotTab", plotOutput("xyPlot", height=800))
+                                      ))
                    ) # tabsetPanel
       )  # mainPanel
     ) # sidebarLayout
@@ -176,15 +154,18 @@ server <- function(input, output, session) {
      # session$sendCustomMessage(type="showGenomicRegion", message=(list(region=roi)))
      })
 
-   observeEvent(input$displayGenomicRegion, {
+   observeEvent(input$displayGenomicRegion, ignoreInit=TRUE,  {
       regionName <- isolate(input$displayGenomicRegion)
-      updateTabsetPanel(session, "trenaTabs", select="igvTab");
-      myFunc <- function(){
-         printf("about to call showGenomicRegion from withing observeEvent input$displayGenomicRegion");
-         showGenomicRegion(session, mapToChromLoc(regionName))
-         } # myFunc
-      later(myFunc, 1)
-      #later(function() {updateSelectInput(session, "displayGenomicRegion", selected=character(0))}, 1)
+      printf("--- displayGenomicRegion change observed: '%s'", regionName)
+      printf("    length: %d", nchar(regionName))
+      if(nchar(regionName) > 0){
+         updateTabsetPanel(session, "trenaTabs", select="igvTab");
+         myFunc <- function(){
+            showGenomicRegion(session, mapToChromLoc(regionName))
+            } # myFunc
+         later(myFunc, 0.2)
+         later(function() {updateSelectInput(session, "displayGenomicRegion", selected=character(0))}, 1)
+         } # if
       })
 
    observeEvent(input$addTrack, {
@@ -282,8 +263,8 @@ server <- function(input, output, session) {
     options=list(pageLength=25, dom="t"))
 
    output$igvShiny <- renderIgvShiny({
-     igvShiny(list(genomeName=genome.name,
-                   initialLocus="chr2:233,027,632-233,264,596"))
+     igvShiny(list(genomeName=genomeName,
+                   initialLocus=targetGene$hugo))
      })
 
   } # server
@@ -293,70 +274,52 @@ displayTrack <- function(session, trackName)
 {
    supportedTracks <- c("enhancers",
                         "dhs",
-                        "chipSeqFootprints",
-                        "chipSeq",
-                        "rs35349669",
-                        "snps",
-                        "footprints",
-                        "enhancer.snps",
-                        "breaking.snps")
+                        "chipSeq")
 
    printf("--- displayTrack('%s')", trackName)
 
-   if(!trackName %in% supportedTracks)
-      return()
+   switch(trackName,
+          enhancers = {printf("create enhancers track");
+                       displayEnhancersTrack(session)},
+          dhs       = {printf("create dhs track");
+                       displayEncodeDhsTrack(session)},
+                       # c("chrom", "chromStart", "chromEnd", "count", "score"))
 
-   if(trackName == "chipSeq"){
-      displayChipSeqByTF(session)
-      return()
-      }
-
-   if(trackName == "chipSeqFootprints"){
-      displayInterleavedCHiPseqAndFootprints(session)
-      return()
-      }
-
-   if(trackName == "footprints"){
-      displayFootprintsByTF(session)
-      return()
-      }
-
-   x <- switch(trackName,
-      enhancers       = {list(bed=tbl.enhancers,        name="INPP5D enhancers",   color="black")},
-      dhs             = {list(bedgraph=tbl.dhs,         name="DHS",                color="blue")},
-      snps            = {list(bedgraph=tbl.snp,         name="GWAS snp",           color="darkRed")},
-      enhancer.snps   = {list(bed=tbl.enhancer.snps,    name="Enhancer snp",       color="darkRed")},
-      breaking.snps   = {list(bed=tbl.breaksBed,        name="Motif-breaking snp", color="maroon")},
-      rs35349669      = {list(bed=data.frame(chr="chr2",
-                                             start=233159830,
-                                             end=233159830,
-                                             name="rs35349669",
-                                             stringsAsFactors=FALSE),
-                              name="rs35349669",
-                              color="purple")}
-      )
+          chipSeq   = {printf("create ChIP-seq track")}
+          )
 
     updateTabsetPanel(session, "trenaTabs", select="igvTab");
 
-    if(trackName == "snps"){
-       tbl.tmp <- x$bedgraph[, c("chrom", "start", "end", "pScore")]
-       loadBedGraphTrack(session, "GWAS snp", tbl.tmp, color=x$color, trackHeight=25, autoscale=FALSE, min=0, max=10)
-       } # bedGraph for snps
-
-    if(trackName == "dhs"){
-       loadBedGraphTrack(session, "DHS", x$bedgraph, color=x$color, trackHeight=25, autoscale=TRUE)
-       } # bedGraph for snps
-
-    if(trackName == "enhancers"){
-       tbl.tmp <- tbl.enhancers[, c("chr", "start", "end", "score")]
-       loadBedGraphTrack(session, "GeneHancer", tbl.tmp, color="black", trackHeight=25, autoscale=FALSE, min=0, max=20)
-       } # bedGraph for snps
-
-   if(trackName %in% c("enhancer.snps", "breaking.snps", "chipSeq", "rs35349669", "spi1.footprints")){
-       loadBedTrack(session, trackName, x$bed, color=x$color, trackHeight=30)
-       } # bed format track
+#    if(trackName == "snps"){
+#       tbl.tmp <- x$bedgraph[, c("chrom", "start", "end", "pScore")]
+#       loadBedGraphTrack(session, "GWAS snp", tbl.tmp, color=x$color, trackHeight=25, autoscale=FALSE, min=0, max=10)
+#       } # bedGraph for snps
+#
+#    if(trackName == "dhs"){
+#       loadBedGraphTrack(session, "DHS", x$bedgraph, color=x$color, trackHeight=25, autoscale=TRUE)
+#       } # bedGraph for snps
+#
+#
+#   if(trackName %in% c("enhancer.snps", "breaking.snps", "chipSeq", "rs35349669", "spi1.footprints")){
+#       loadBedTrack(session, trackName, x$bed, color=x$color, trackHeight=30)
+#       } # bed format track
 
 } # displayTrack
+#------------------------------------------------------------------------------------------------------------------------
+displayEnhancersTrack <- function(session)
+{
+   tbl.tmp <- tbl.enhancers[, c("chrom", "start", "end", "combinedScore")]
+   loadBedGraphTrack(session, "GeneHancer", tbl.tmp, color="black", trackHeight=25, autoscale=FALSE, min=0, max=20)
+
+} # displayEnhancersTrack
+#------------------------------------------------------------------------------------------------------------------------
+displayEncodeDhsTrack <- function(session)
+{
+   tbl.tmp <- tbl.dhs[, c("chrom", "chromStart", "chromEnd", "score")]
+   colnames(tbl.tmp) <- c("chrom", "start", "end", "score")
+   loadBedGraphTrack(session, "DHS", tbl.tmp, color="black", trackHeight=25, autoscale=TRUE)
+
+} # displayEncodeDhsTrack
 #------------------------------------------------------------------------------------------------------------------------
 displayChipSeqByTF <- function(session)
 {
@@ -375,134 +338,6 @@ displayChipSeqByTF <- function(session)
       } # for tf
 
 } # displayChipSeqByTF
-#------------------------------------------------------------------------------------------------------------------------
-displayInterleavedCHiPseqAndFootprints <- function(session)
-{
-   colors <- brewer.pal(8, "Dark2")
-   totalColorCount <- length(colors)
-   colorNumber <- 0
-
-   for(gene in unique(tbl.csInModel$tf)){
-      tbl.broad <- subset(tbl.csInModel, tf==gene)[, c("chr", "start", "end")]
-      colorNumber <- (colorNumber %% totalColorCount) + 1
-      color <- colors[colorNumber]
-      loadBedTrack(session, sprintf("%s ChIP", gene), tbl.broad, color=color, trackHeight=25)
-      tbl.bed <- subset(tbl.fp, tf==gene)[, c("chr", "start", "end")]
-      loadBedTrack(session, sprintf("%s fp", gene), tbl.bed, color=color, trackHeight=25)
-      } # for tf
-
-
-} # displayInterleavedCHiPseqAndFootprints
-#------------------------------------------------------------------------------------------------------------------------
-displayFootprintsByTF <- function(session)
-{
-   colors <- brewer.pal(8, "Dark2")
-   totalColorCount <- length(colors)
-   colorNumber <- 0
-
-   for(gene in unique(tbl.fp$tf)){
-      tbl.bed <- subset(tbl.fp, tf==gene)[, c("chr", "start", "end")]
-      colorNumber <- (colorNumber %% totalColorCount) + 1
-      color <- colors[colorNumber]
-      loadBedTrack(session, sprintf("%s fp", gene), tbl.bed, color=color, trackHeight=25)
-      } # for tf
-
-} # displayFootprintsByTF
-#------------------------------------------------------------------------------------------------------------------------
-findDisruptiveSNPs <- function(snpSignificanceThreshold, motifMatchThreshold, bindingLossThreshold)
-{
-   printf("--- findDisruptiveSNPs")
-   printf("  snpSignificanceThreshold: %5.1f", snpSignificanceThreshold)
-   printf("  motifMatchThreshold: %5.1f",      motifMatchThreshold)
-   printf("  bindingLossThreshold: %5.1f",     bindingLossThreshold);
-   browser()
-   #tbl.tmp <- subset(tbl.bs,  -log10(gwasPval) >= snpSignificanceThreshold |
-   #                           -log10(eqtlPval) >= snpSignificanceThreshold)
-   #tbl.out <- subset(tbl.tmp,
-   #                  -log10(motif.pVal )   >= motifMatchThreshold &
-   #                  wtMutMatchDelta       >= bindingLossThreshold)
-   #rintf("snps meet criteria: %d", nrow(tbl.out))
-   data.frame()
-
-} # findDisruptiveSNPs
-#------------------------------------------------------------------------------------------------------------------------
-test_findDisruptiveSNPs <- function()
-{
-   printf("--- test_findDisruptiveSNPs")
-   checkTrue(exists("tbl.bs"))
-   tbl.dsnps <- findDisruptiveSNPs(snpSignificanceThreshold=0, motifMatchThreshold=3, bindingLossThreshold=1)
-   dim(tbl.dsnps)
-   coi <- c("motif", "chrom", "start", "stop", "p.value", "rsid", "start.1", "wt", "mut.x", "snpPval.x", "wtMutMatchDelta")
-   tbl.dsnps[, coi]
-
-} # test_findDisruptiveSNPs
-#------------------------------------------------------------------------------------------------------------------------
-displayDisruptiveSnps <- function(session, tbl.disruptions)
-{
-   printf("--- displayDisruptiveSnps");
-
-   coi <- c("chrom", "start", "end", "motifName", "tf", "motifScore", "rsid")
-   tbl.condensed <- tbl.disruptions[, coi]
-   tfs <- unique(tbl.condensed$tf)
-   for(geneSymbol in tfs){
-      tbl.tmp <- subset(tbl.condensed, tf==geneSymbol)
-      tbl.tmp$motifName <- sprintf("tfbs-snp:%s:%s", tbl.tmp$motifName, tbl.tmp$rsid)
-      temp.filename <- tempfile(tmpdir="./tmp", fileext=".bed")
-      write.table(tbl.tmp, sep="\t", row.names=FALSE, col.names=FALSE, quote=FALSE, file=temp.filename)
-      session$sendCustomMessage(type="displayBedTrack",
-                             message=(list(filename=temp.filename,
-                                           trackName=sprintf("%s w/snp", geneSymbol),
-                                           displayMode="EXPANDED",
-                                           color="red",
-                                           trackHeight=40)))
-      } # for geneSymbol
-
-} # displayDisruptiveSnps
-#------------------------------------------------------------------------------------------------------------------------
-calculateVisibleSNPs <- function(targetGene, roi, filters, snpShoulder)
-{
-   #return(sprintf("calculateVisibleSNPs(%s), %s, %s, %d", date(), targetGene, roi, snpShoulder))
-   tbl.mayo.snps <- mef2c@misc.data$MAYO.eqtl.snps[, c("chrom", "start", "end", "score")]
-   tbl.mayo.snps <- tbl.mayo.snps[order(tbl.mayo.snps$start, decreasing=FALSE),]
-
-   tbl.igap.snps <- mef2c@misc.data[["IGAP.snpChip"]][, c("chrom", "start", "end", "score")]
-   tbl.igap.snps <- tbl.igap.snps[order(tbl.igap.snps$start, decreasing=FALSE),]
-
-   temp.filename <- sprintf("igvdata/tmp%d.bedGraph", as.integer(Sys.time()))
-   write.table(tbl.igap.snps, sep="\t", row.names=FALSE, col.names=FALSE, quote=FALSE, file=temp.filename)
-   return(temp.filename)
-
-} # calculateVisibleSNPs
-#----------------------------------------------------------------------------------------------------
-removeTrack <- function(session, trackName)
-{
-  session$sendCustomMessage(type="removeTrack", message=list(trackName=trackName))
-
-} # removeTrack
-#----------------------------------------------------------------------------------------------------
-displayBindingSites <- function(session, target.tf)
-{
-   xyz <- "--- displayBindingSites, consult tbl.fimo..."
-   #browser()
-   if(!target.tf %in% tbl.fimo$tf){
-      printf("tf %s not found in tbl.fimo", target.tf, state$currentModelName)
-      return()
-      }
-   motif.pVal.threshold <- isolate(session$input$fimo.motif.significance)
-   tbl.tfbs <- subset(tbl.fimo, tf==target.tf & -log10(motif.pVal) >= motif.pVal.threshold)
-   tbl.tfbs <- tbl.tfbs[, c("chrom", "motifStart", "motifEnd", "motif.pScore")]
-   temp.filename <- tempfile(tmpdir="tmp", fileext=".bed")
-   write.table(tbl.tfbs, sep="\t", row.names=FALSE, col.names=FALSE, quote=FALSE, file=temp.filename)
-   updateTabsetPanel(session, "trenaTabs", select="igvTab");
-   later(function(){
-       session$sendCustomMessage(type="displayBedTrack",
-                                   message=(list(filename=temp.filename,
-                                                 trackName=target.tf,
-                                                 color="darkGreen",
-                                                 trackHeight=40)))
-       }, 1)
-
-} # displayBindingSites
 #------------------------------------------------------------------------------------------------------------------------
 # tbl.pheno$Diagnosis distribution in temporal cortex data
 #   AMP-AD_MayoBB_UFL-Mayo-ISB_IlluminaHiSeq2000_TCX_Covariates_Flowcell_1.csv
@@ -633,7 +468,7 @@ displaySNPsNearBindingSites <- function(session)
 #------------------------------------------------------------------------------------------------------------------------
 mapToChromLoc <- function(regionName)
 {
-   roi <- targetGene   # a safe fallback
+   roi <- targetGene$hugo   # a safe fallback
 
    if(regionName == "traditionalPromoter"){
       tbl.transcripts <- getTranscriptsTable(trenaGene)
@@ -656,11 +491,10 @@ mapToChromLoc <- function(regionName)
       roi <- sprintf("%s:%d-%d", chrom, start, end)
       }
 
-   if(regionName == "wide"){
-      tbl.enhancers <- getEnhancers(psg1)
+   if(regionName == "enhancersRegion"){
       chrom <- tbl.enhancers$chrom[1]
-      start <- min(tbl.enhancers$start)
-      end   <- max(tbl.enhancers$end)
+      start <- min(tbl.enhancers$start) - 10000
+      end   <- max(tbl.enhancers$end) + 10000
       roi <- sprintf("%s:%d-%d", chrom, start, end)
       }
 
@@ -668,11 +502,48 @@ mapToChromLoc <- function(regionName)
 
 } # mapToChromLoc
 #------------------------------------------------------------------------------------------------------------------------
-addAllBindingSites <- function(session)
+buildFootprintModel <- function(upstream, downstream)
 {
-   printf("addBindingSites - disabled for now")
+   tbl.gene <- subset(getTranscriptsTable(trenaGene), moleculetype=="gene")[1,]
+   tss <- tbl.gene$start
+   min.loc <- tss - upstream
+   max.loc <- tss + downstream
 
-} # addAllTFbindingSites
+   if(tbl.gene$strand == "-"){
+      tss <- tbl.gene$endpos
+      min.loc <- tss - downstream
+      max.loc <- tss + upstream
+      }
+
+   chrom <-tbl.gene$chr
+   tbl.regions <- data.frame(chrom=chrom, start=min.loc, end=max.loc, stringsAsFactors=FALSE)
+   mtx <- loadExpressionData(trenaGene, "FilteredLengthScaledTPM8282018-vsn")
+
+   build.spec <- list(title=sprintf("%s model %d", targetGene$hugo, 1),
+                      type="footprint.database",
+                      regions=tbl.regions,
+                      geneSymbol=targetGene$hugo,
+                      tss=tss,
+                      matrix=mtx,
+                      db.host="khaleesi.systemsbiology.net",
+                      databases=list("brain_hint_20"),
+                      motifDiscovery="builtinFimo",
+                      tfPool=allKnownTFs(identifierType="geneSymbol"),
+                      tfMapping="MotifDB",
+                      tfPrefilterCorrelation=0.1,
+                      annotationDbFile=dbfile(org.Hs.eg.db),
+                      orderModelByColumn="pearsonCoeff",
+                      solverNames=c("lasso", "lassopv", "pearson", "randomForest", "ridge", "spearman"))
+
+     #------------------------------------------------------------
+     # use the above build.spec: a small region, high correlation
+     # required, MotifDb for motif/tf lookup
+     #------------------------------------------------------------
+
+   fpBuilder <- FootprintDatabaseModelBuilder(genomeName, targetGene$hugo, build.spec, quiet=TRUE)
+   x <- build(fpBuilder)
+
+} # buildFootprintModel
 #------------------------------------------------------------------------------------------------------------------------
 shinyOptions <- list()
 
