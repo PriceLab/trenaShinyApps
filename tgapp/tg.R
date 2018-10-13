@@ -9,8 +9,9 @@ library(RUnit)
 library(RColorBrewer)
 library(org.Hs.eg.db)
 library(shiny)
-library(shinydashboard)
+#library(shinydashboard)
 library(igvShiny)
+library(shinyjs)
 library(DT)
 
 library(trenaSGM)
@@ -97,20 +98,20 @@ createGeneModelPanel <- function()
 {
 
    panel <- tabPanel(title="Create new trena model",  value="geneModelTab",
-                  mainPanel(
+                  mainPanel(width=10,
                      br(),
                      h4("(From binding sites In the genomic region currently displayed in the IGV view)"),
                      br(),
                      fluidRow(
                        column(4,checkboxGroupInput("footprintDatabases", "Footprint Databases",
-                                       footprintDatabases, selected=footprintDatabases[1])),
+                                                   footprintDatabases, selected=footprintDatabases[1])),
                        column(4, checkboxGroupInput("intersectWithRegions", "Intersect footprints with:",
-                                       c("GeneHancer" = "genehancer",
-                                         "Encode DHS" = "encodeDHS"))),
+                                                    c("GeneHancer" = "genehancer",
+                                                      "Encode DHS" = "encodeDHS"))),
                        column(4, selectInput("expressionSet", "Choose gene expression dataset:",
                                              getExpressionMatrixNames(trenaGene)))),
-                       fluidRow(column(width=1, offset=4, actionButton("buildModel", "Build model")))
-                       ))
+                     fluidRow(column(width=1, offset=4, actionButton("buildModelButton", "Build model")))
+                     ))
    return(panel)
 
 } # createGeneModelPanel
@@ -119,7 +120,11 @@ setupBuildModelUI <- function(input, output, session)
 {
    observeEvent(input$footprintDatabases, {
                    printf("footprintDatabases checkbox group event")
-                   })
+                })
+   observeEvent(input$buildModelButton, ignoreInit = TRUE, {
+      buildFootprintModel(2000, 500)
+      })
+
 
 } # setupBuildModelUI
 #------------------------------------------------------------------------------------------------------------------------
@@ -299,6 +304,8 @@ buildFootprintModel <- function(upstream, downstream)
 
    fpBuilder <- FootprintDatabaseModelBuilder(genomeName, targetGene$hugo, build.spec, quiet=TRUE)
    x <- build(fpBuilder)
+   browser()
+   xyz <- "back from build"
 
 } # buildFootprintModel
 #------------------------------------------------------------------------------------------------------------------------
