@@ -15,16 +15,18 @@ library(DT)
 
 library(trenaSGM)
 library(TrenaGene)
-library(TrenaGenePlacentaData)
+library(TrenaGeneDataPlacenta)
 #------------------------------------------------------------------------------------------------------------------------
 targetGene <- list(hugo="PSG1", ensembl="ENSG00000231924", combined="ENSG00000231924|PSG1")
 genomeName <- "hg38"
 dataDirectory <- system.file(package="TrenaGenePlacentaData", "extdata")
+psg1.data <- TrenaGeneDataPlacenta("PSG1")
 
-trenaGene <- TrenaGene(targetGene$hugo, genomeName, expressionDataDirectory=dataDirectory)
+trenaGene <- TrenaGene(psg1.data) #argetGene$hugo, genomeName, expressionDataDirectory=dataDirectory)
 expression.data.set.names <- getExpressionMatrixNames(trenaGene)
 tbl.enhancers <- getEnhancers(trenaGene)
 tbl.dhs <- getEncodeDHS(trenaGene)
+footprintDatabases <- getFootprintDatabaseNames(getGeneData(trenaGene))
 #------------------------------------------------------------------------------------------------------------------------
 combineGeneNames <- function(ensemblIDs)
 {
@@ -95,19 +97,37 @@ createGeneModelPanel <- function()
 {
 
    panel <- tabPanel(title="Create new trena model",  value="geneModelTab",
-                     mainPanel(radioButtons("tfSelectionChoice", "Row (transcription factor) selection will display:",
-                                   c("XY plot" = "xyPlot",
-                                     "Binding sites" = "displayBindingSites"),
-                                   inline=TRUE),
-                      DTOutput("geneModelTable")
-                      ))
+                  mainPanel(
+                     br(),
+                     h4("(From binding sites In the genomic region currently displayed in the IGV view)"),
+                     br(),
+                     fluidRow(
+                       column(4,checkboxGroupInput("footprintDatabases", "Footprint Databases",
+                                       footprintDatabases, selected=footprintDatabases[1])),
+                       column(4, checkboxGroupInput("intersectWithRegions", "Intersect footprints with:",
+                                       c("GeneHancer" = "genehancer",
+                                         "Encode DHS" = "encodeDHS"))),
+                       column(4, selectInput("expressionSet", "Choose gene expression dataset:",
+                                             getExpressionMatrixNames(trenaGene)))),
+                       fluidRow(column(width=1, offset=4, actionButton("buildModel", "Build model")))
+                       ))
    return(panel)
 
 } # createGeneModelPanel
 #------------------------------------------------------------------------------------------------------------------------
+setupBuildModelUI <- function(input, output, session)
+{
+   observeEvent(input$footprintDatabases, {
+                   printf("footprintDatabases checkbox group event")
+                   })
+
+} # setupBuildModelUI
+#------------------------------------------------------------------------------------------------------------------------
 server <- function(input, output, session) {
 
    dt.proxy <- dataTableProxy("geneModelTable")
+
+   setupBuildModelUI(input, output, session)
 
    observeEvent(input$trackClick, {
       printf("browser snp click observed!")
