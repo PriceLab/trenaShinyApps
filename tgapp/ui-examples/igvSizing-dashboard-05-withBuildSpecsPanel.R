@@ -2,20 +2,25 @@ library(shiny)
 library(shinydashboard)
 library(shinyjs)
 library(igvShiny)
+library(DT)
 #------------------------------------------------------------------------------------------------------------------------
 targetGene <- list(hugo="PSG1", ensembl="ENSG00000231924", combined="ENSG00000231924|PSG1")
 footprintDatabases <- c("db one", "db two")
+expressionMatrixNames <- c("mtx1", "mtx2", "mtx3")
 #------------------------------------------------------------------------------------------------------------------------
 createSidebar <- function()
 {
   dashboardSidebar(
-    sidebarMenu(
-      menuItem("IGV and Current Models", tabName = "igvAndTable"), #, icon = icon("dashboard")),
-      menuItem("Build a new Model", tabName = "buildModels") #icon = icon("th"))
+    sidebarMenu(id="sidebarMenu",
+       menuItem("IGV and Current Models", tabName = "igvAndTable"),
+       menuItem("Build a new Model",      tabName = "buildModels")
       ),
-     actionButton(inputId = "igvHideButton", label = "Toggle IGV"),
-     actionButton(inputId = "tableHideButton", label = "Toggle table")
-     )
+    conditionalPanel(id="igvTableWidgets",
+        condition = "input.sidebarMenu == 'igvAndTable'",
+        actionButton(inputId = "igvHideButton", label = "Toggle IGV"),
+        actionButton(inputId = "tableHideButton", label = "Toggle table")
+        ) # conditionalPanel
+     ) # dashboardSidebar
 
 } # createSidebar
 #------------------------------------------------------------------------------------------------------------------------
@@ -25,17 +30,29 @@ createBody <- function()
       tabItems(
          tabItem(tabName="igvAndTable",
             fluidRow(
-               column(width=8, id="igvColumn",
+               column(width=9, id="igvColumn",
                   igvShinyOutput('igvShiny', height="800px")
                   ),
-               column(width=4, id="dataTableColumn", title="mtcars",
+               column(width=3, id="dataTableColumn", title="mtcars",
                   DTOutput("table")
                   #actionButton("button2", "mainPanel button")
                   )
                ) # fluidRow
             ), # tabItem 1
          tabItem(tabName="buildModels",
-             fluidRow(h3("build models here"))
+             h4("Build trena regulatory model from DNase footprints in the genomic region currently displayed in the IGV view, with these constraints:"),
+             br(),
+             fluidRow(
+                column(2, offset=1, checkboxGroupInput("footprintDatabases", "Footprint Databases",
+                                            footprintDatabases, selected=footprintDatabases[1])),
+                column(2, checkboxGroupInput("intersectWithRegions", "Intersect footprints with:",
+                                             c("GeneHancer" = "genehancer",
+                                               "Encode DHS" = "encodeDHS",
+                                               "Use all footprints in region" = "allDNAForFootprints"))),
+                column(3, selectInput("expressionSet", "Choose gene expression dataset:",
+                                      expressionMatrixNames))),
+             br(),
+             fluidRow(column(width=1, offset=3, actionButton("buildModelButton", "Build model")))
             ) # tabItem 2
          ) # tabItems
 
@@ -89,13 +106,13 @@ server <- function(input, output){
       if(input$igvHideButton %% 2 == 1){
          printf("  --- hiding igv, widening dataTable")
          shinyjs::hide(id = "igvColumn")
-         shinyjs::toggleClass("dataTableColumn", "col-sm-4")
+         shinyjs::toggleClass("dataTableColumn", "col-sm-3")
          shinyjs::toggleClass("dataTableColumn", "col-sm-12")
        } else {
          printf("  --- showing igv, narrowing dataTable")
-         shinyjs::show(id = "igvColumn")
          shinyjs::toggleClass("dataTableColumn", "col-sm-12")
-         shinyjs::toggleClass("dataTableColumn", "col-sm-4")
+         shinyjs::toggleClass("dataTableColumn", "col-sm-3")
+         shinyjs::show(id = "igvColumn")
          }
        })
 
@@ -103,12 +120,12 @@ server <- function(input, output){
       printf("tableHideButton: %s", input$tableHideButton)
       if(input$tableHideButton %% 2 == 1){
          shinyjs::hide(id = "dataTableColumn")
-         shinyjs::toggleClass("igvColumn", "col-sm-8")
+         shinyjs::toggleClass("igvColumn", "col-sm-9")
          shinyjs::toggleClass("igvColumn", "col-sm-12")
       } else {
-         shinyjs::show(id = "dataTableColumn")
          shinyjs::toggleClass("igvColumn", "col-sm-12")
-         shinyjs::toggleClass("igvColumn", "col-sm-8")
+         shinyjs::toggleClass("igvColumn", "col-sm-9")
+         shinyjs::show(id = "dataTableColumn")
 
          }
       })
