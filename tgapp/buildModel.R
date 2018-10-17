@@ -19,7 +19,8 @@ createBuildModelTab <- function()
                                       expressionMatrixNames))),
              br(),
              fluidRow(column(width=3, offset=3, textInput("modelNameTextInput", "Model name", width=240))),
-             fluidRow(column(width=1, offset=3, actionButton("buildModelButton", "Build model")))
+             fluidRow(column(width=1, offset=3, actionButton("buildModelButton", "Build model"))),
+             fluidRow(column(width=1, offset=3, textOutput("buildInProgressTextArea")))
              ) # tabItem
 
    return(tab)
@@ -28,6 +29,14 @@ createBuildModelTab <- function()
 #------------------------------------------------------------------------------------------------------------------------
 setupBuildModel <- function(session, input, output)
 {
+
+   observeEvent(input$modelSelector, ignoreInit=TRUE, {
+       modelName <- isolate(input$modelSelector)
+       printf("--- new model selected: %s", modelName)
+       new.table <- state$models[[modelName]]$model
+       displayModel(session, input, output, new.table, modelName)
+       })
+
    observeEvent(input$modelNameTextInput, {
        currentName <- isolate(input$modelNameTextInput)
        if(nchar(currentName) >= 1)
@@ -43,22 +52,9 @@ setupBuildModel <- function(session, input, output)
       model.count <- length(state$models)
       new.model.name <- names(state$models)[model.count]
       new.table <- state$models[[model.count]]$model
-      tf.names <- new.table$gene
-      new.table <- new.table[, -1]
-      if("lassoPValue" %in% colnames(new.table))
-          new.table <- roundNumericColumns(new.table, 2, "lassoPValue")
-      rownames(new.table) <- tf.names
-      max.model.rows <- 20
-      if(nrow(new.table) > max.model.rows)
-         new.table <- new.table[1:max.model.rows,]
-      output$table = DT::renderDataTable(new.table,
-                                         width="800px",
-                                         class='nowrap display',
-                                         extensions='FixedColumns',
-                                         options=list(scrollX=TRUE, dom='t', pageLength=100,
-                                                      fixedColumns=list(leftColumns=1)))
-      browser()
-      xyz <- 99
+      output$buildInProgressTextArea <- renderText("build complete")
+      displayModel(session, input, output, new.table, new.model.name)
+      updateTabItems(session, "sidebarMenu", select="igvAndTable")
       })
 
 } # setupBuildModel
@@ -101,7 +97,7 @@ run.trenaSGM <- function(trenaGene,
                          footprint.database.names)
 {
    printf("--- entering run.trenaSGM")
-      # no search for overlaps just jet: ignore "tracks.to.intersect.with"
+      # no search for overlaps just yet: ignore "tracks.to.intersect.with"
    tbl.regions <- data.frame(chrom=chromosome, start=start.loc, end=end.loc, stringsAsFactors=FALSE)
    mtx <- loadExpressionData(trenaGene, expression.matrix.name)
    geneSymbol <- getGeneSymbol(getGeneData(trenaGene))
@@ -135,8 +131,30 @@ run.trenaSGM <- function(trenaGene,
    print(head(x$model, n=10))
    state$models[[model.name]] <- x
 
-
 } # run.trenaSGM
+#------------------------------------------------------------------------------------------------------------------------
+# beautify the data.frame, display it in the UI DataTable, update the modelSelector pulldown
+displayModel <- function(session, input, output, tbl.model, new.model.name)
+{
+   tf.names <- tbl.model$gene
+   tbl.model <- tbl.model[, -1]
+   if("lassoPValue" %in% colnames(tbl.model))
+       tbl.model <- roundNumericColumns(tbl.model, 4, "lassoPValue")
+   rownames(tbl.model) <- tf.names
+   max.model.rows <- 20
+   if(nrow(tbl.model) > max.model.rows)
+      tbl.model <- tbl.model[1:max.model.rows,]
+   output$table = DT::renderDataTable(tbl.model,
+                                      width="800px",
+                                      class='nowrap display',
+                                      extensions='FixedColumns',
+                                      options=list(scrollX=TRUE, dom='t', pageLength=100,
+                                                   fixedColumns=list(leftColumns=1)))
+   updateSelectInput(session, "modelSelector",
+                     choices=names(state$models),
+                     selected=new.model.name)
+
+} # displayModel
 #------------------------------------------------------------------------------------------------------------------------
 test.run.trenaSGM <- function()
 {

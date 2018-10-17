@@ -70,10 +70,10 @@ createBody <- function()
          tabItem(tabName="igvAndTable",
             fluidRow(
                column(width=3, offset=9, id="modelSelectorColumn",
-                      selectInput("modelSelector", NULL,  c("mtcars", "something else")))),
+                      selectInput("modelSelector", NULL,  "- no models yet -"))),
             fluidRow(
                column(width=9, id="igvColumn", igvShinyOutput('igvShiny', height="800px")),
-               column(width=3, id="dataTableColumn", title="mtcars", DTOutput("table"))
+               column(width=3, id="dataTableColumn", DTOutput("table"), type=1)
                ) # fluidRow
             ), # tabItem 1
          createBuildModelTab()
@@ -121,10 +121,13 @@ server <- function(session, input, output){
       igvShiny(options) # , height=800)
       })
 
-   output$table = DT::renderDataTable(mtcars[1:20,],
+   output$table = DT::renderDataTable(data.frame(),
                                       width="800px",
                                       class='nowrap display',
-                                      options=list(scrollX=TRUE, dom='t', pageLength=100))
+                                      options=list(scrollX=TRUE,
+                                                   dom='t',
+                                                   autowWdth=FALSE,
+                                                   pageLength=100))
 
    observeEvent(input$currentGenomicRegion, {
       new.region <- isolate(input$currentGenomicRegion)
@@ -132,7 +135,7 @@ server <- function(session, input, output){
       state[["chromLocRegion"]] <- new.region
       })
 
-   setupIgvAndTableToggling(input);
+   setupIgvAndTableToggling(session, input);
    setupAddTrack(session, input, output)
    setupBuildModel(session, input, output)
    later(function(){

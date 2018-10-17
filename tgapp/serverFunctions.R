@@ -1,6 +1,6 @@
 # serverFunctions.R
 #------------------------------------------------------------------------------------------------------------------------
-setupIgvAndTableToggling <- function(input)
+setupIgvAndTableToggling <- function(session, input)
 {
    observeEvent(input$currentGenomicRegion, {
        newValue <- input$currentGenomicRegion
@@ -9,7 +9,6 @@ setupIgvAndTableToggling <- function(input)
        })
 
    observeEvent(input$igvHideButton, {
-     printf("igvHideButton: %s", input$igvHideButton)
      if(input$igvHideButton %% 2 == 1){
         printf("  --- hiding igv, widening dataTable")
         shinyjs::hide(id = "igvColumn")
@@ -21,10 +20,11 @@ setupIgvAndTableToggling <- function(input)
         shinyjs::toggleClass("dataTableColumn", "col-sm-3")
         shinyjs::show(id = "igvColumn")
         }
+      printf("--- calling redrawIgvWidget")
+      redrawIgvWidget(session)
       })
 
    observeEvent(input$tableHideButton, {
-      printf("tableHideButton: %s", input$tableHideButton)
       if(input$tableHideButton %% 2 == 1){
          shinyjs::hide(id = "modelSelectorColumn")
          shinyjs::hide(id = "dataTableColumn")
@@ -33,9 +33,13 @@ setupIgvAndTableToggling <- function(input)
       } else {
          shinyjs::toggleClass("igvColumn", "col-sm-12")
          shinyjs::toggleClass("igvColumn", "col-sm-9")
+         shinyjs::hide(id = "modelSelectorColumn")
+         shinyjs::hide(id = "dataTableColumn")
          shinyjs::show(id = "dataTableColumn")
          shinyjs::show(id = "modelSelectorColumn")
          }
+      printf("--- calling redrawIgvWidget")
+      redrawIgvWidget(session)
       })
 } # setupIgvAndTableToggling
 #------------------------------------------------------------------------------------------------------------------------

@@ -117,6 +117,7 @@ server <- function(input, output){
     observeEvent(input$igvHideButton, {
       printf("igvHideButton: %s", input$igvHideButton)
       if(input$igvHideButton %% 2 == 1){
+         browser()
          printf("  --- hiding igv, widening dataTable")
          shinyjs::hide(id = "igvColumn")
          shinyjs::toggleClass("dataTableColumn", "col-sm-3")
