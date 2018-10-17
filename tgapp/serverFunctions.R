@@ -2,6 +2,12 @@
 #------------------------------------------------------------------------------------------------------------------------
 setupIgvAndTableToggling <- function(input)
 {
+   observeEvent(input$currentGenomicRegion, {
+       newValue <- input$currentGenomicRegion
+       state$chromLocRegion <- newValue
+       # printf("currentGenomicRegion arrived, %s", newValue)
+       })
+
    observeEvent(input$igvHideButton, {
      printf("igvHideButton: %s", input$igvHideButton)
      if(input$igvHideButton %% 2 == 1){
@@ -20,6 +26,7 @@ setupIgvAndTableToggling <- function(input)
    observeEvent(input$tableHideButton, {
       printf("tableHideButton: %s", input$tableHideButton)
       if(input$tableHideButton %% 2 == 1){
+         shinyjs::hide(id = "modelSelectorColumn")
          shinyjs::hide(id = "dataTableColumn")
          shinyjs::toggleClass("igvColumn", "col-sm-9")
          shinyjs::toggleClass("igvColumn", "col-sm-12")
@@ -27,6 +34,7 @@ setupIgvAndTableToggling <- function(input)
          shinyjs::toggleClass("igvColumn", "col-sm-12")
          shinyjs::toggleClass("igvColumn", "col-sm-9")
          shinyjs::show(id = "dataTableColumn")
+         shinyjs::show(id = "modelSelectorColumn")
          }
       })
 } # setupIgvAndTableToggling

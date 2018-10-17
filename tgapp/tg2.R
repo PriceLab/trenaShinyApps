@@ -14,6 +14,7 @@ library(TrenaGene)
 library(TrenaGeneDataPlacenta)
 #------------------------------------------------------------------------------------------------------------------------
 state <- new.env(parent=emptyenv())
+state$models <- list()
 #------------------------------------------------------------------------------------------------------------------------
 targetGene <- list(hugo="PSG1", ensembl="ENSG00000231924", combined="ENSG00000231924|PSG1")
 genomeName <- "hg38"
@@ -27,9 +28,15 @@ tbl.dhs <- getEncodeDHS(trenaGene)
 footprintDatabases <- getFootprintDatabaseNames(getGeneData(trenaGene))
 tbl.transcripts <- getTranscriptsTable(trenaGene)
 
+#------------------------------------------------------------------------------------------------------------------------
+# calculate the initial igv region, using the (typically? always? single transcripted designated as "gene"
+#------------------------------------------------------------------------------------------------------------------------
 tbl.gene <- subset(tbl.transcripts, moleculetype=="gene")[1,]
-initial.chromLoc <- with(tbl.gene, sprintf("%s:%d-%d", chr, start, endpos))
-
+start <- tbl.gene$start
+end   <- tbl.gene$endpos
+chrom <- tbl.gene$chr
+padding <- round(0.25 * (end-start))
+initial.chromLoc <- sprintf("%s:%d-%d", chrom, start-padding, end+padding)
 #------------------------------------------------------------------------------------------------------------------------
 createSidebar <- function()
 {
@@ -62,12 +69,11 @@ createBody <- function()
       tabItems(
          tabItem(tabName="igvAndTable",
             fluidRow(
-               column(width=9, id="igvColumn",
-                  igvShinyOutput('igvShiny', height="800px")
-                  ),
-               column(width=3, id="dataTableColumn", title="mtcars",
-                  DTOutput("table")
-                  )
+               column(width=3, offset=9, id="modelSelectorColumn",
+                      selectInput("modelSelector", NULL,  c("mtcars", "something else")))),
+            fluidRow(
+               column(width=9, id="igvColumn", igvShinyOutput('igvShiny', height="800px")),
+               column(width=3, id="dataTableColumn", title="mtcars", DTOutput("table"))
                ) # fluidRow
             ), # tabItem 1
          createBuildModelTab()
@@ -95,6 +101,10 @@ ui <- dashboardPage(
           margin: 5px;
           margin-right: 15px;
           }
+        #table{
+          border: 1px solid black;
+          border-radius: 5px;
+          }
        '))),
      createBody()),
   useShinyjs()
@@ -105,7 +115,7 @@ server <- function(session, input, output){
 
    output$igvShiny <- renderIgvShiny({
       options <- list(genomeName="hg38",
-                      initialLocus="PSG1",
+                      initialLocus=initial.chromLoc,
                       displayMode="EXPANDED",
                       trackHeight=300)
       igvShiny(options) # , height=800)

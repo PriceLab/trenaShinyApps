@@ -28,7 +28,6 @@ displayTrack <- function(session, trackName)
 #------------------------------------------------------------------------------------------------------------------------
 displayEnhancersTrack <- function(session)
 {
-   browser()
    tbl.tmp <- tbl.enhancers[, c("chrom", "start", "end", "combinedScore")]
    loadBedGraphTrack(session, "GeneHancer", tbl.tmp, color="black", trackHeight=25, autoscale=FALSE, min=0, max=20)
 

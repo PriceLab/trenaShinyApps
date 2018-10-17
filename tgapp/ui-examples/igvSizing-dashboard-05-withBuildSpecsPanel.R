@@ -30,14 +30,11 @@ createBody <- function()
       tabItems(
          tabItem(tabName="igvAndTable",
             fluidRow(
-               column(width=9, id="igvColumn",
-                  igvShinyOutput('igvShiny', height="800px")
-                  ),
-               column(width=3, id="dataTableColumn", title="mtcars",
-                  DTOutput("table")
-                  #actionButton("button2", "mainPanel button")
-                  )
-               ) # fluidRow
+               column(width=3, offset=9, id="modelSelectorColumn",
+                      selectInput("modelSelector", NULL,  c("mtcars", "something else")))),
+            fluidRow(
+               column(width=9, id="igvColumn", igvShinyOutput('igvShiny', height="800px")),
+               column(width=3, id="dataTableColumn", title="mtcars", DTOutput("table")))
             ), # tabItem 1
          tabItem(tabName="buildModels",
              h4("Build trena regulatory model from DNase footprints in the genomic region currently displayed in the IGV view, with these constraints:"),
@@ -52,6 +49,7 @@ createBody <- function()
                 column(3, selectInput("expressionSet", "Choose gene expression dataset:",
                                       expressionMatrixNames))),
              br(),
+             fluidRow(column(width=3, offset=3, textInput("modelNameTextInput", "Model name", width=240))),
              fluidRow(column(width=1, offset=3, actionButton("buildModelButton", "Build model")))
             ) # tabItem 2
          ) # tabItems
@@ -78,6 +76,10 @@ ui <- dashboardPage(
           margin: 5px;
           margin-right: 15px;
           }
+        #table{
+          border: 1px solid black;
+          border-radius: 5px;
+          }
        '))),
      createBody()),
   useShinyjs()
@@ -94,10 +96,21 @@ server <- function(input, output){
       igvShiny(options) # , height=800)
       })
 
+   observeEvent(input$modelNameTextInput, {
+       currentName <- isolate(input$modelNameTextInput)
+       printf("currentName size: %d", nchar(currentName))
+       if(nchar(currentName) > 5)
+          shinyjs::enable("buildModelButton")
+       else
+          shinyjs::disable("buildModelButton")
+       })
+
    output$table = DT::renderDataTable(mtcars[1:20,],
                                       width="800px",
                                       class='nowrap display',
-                                      options=list(scrollX=TRUE, dom='t', pageLength=100))
+                                      extensions='FixedColumns',
+                                      options=list(scrollX=TRUE, dom='t', pageLength=100,
+                                                   fixedColumns=list(leftColumns=2)))
 
 
 
@@ -120,13 +133,14 @@ server <- function(input, output){
       printf("tableHideButton: %s", input$tableHideButton)
       if(input$tableHideButton %% 2 == 1){
          shinyjs::hide(id = "dataTableColumn")
+         shinyjs::hide(id = "modelSelectorColumn")
          shinyjs::toggleClass("igvColumn", "col-sm-9")
          shinyjs::toggleClass("igvColumn", "col-sm-12")
       } else {
          shinyjs::toggleClass("igvColumn", "col-sm-12")
          shinyjs::toggleClass("igvColumn", "col-sm-9")
          shinyjs::show(id = "dataTableColumn")
-
+         shinyjs::show(id = "modelSelectorColumn")
          }
       })
 
