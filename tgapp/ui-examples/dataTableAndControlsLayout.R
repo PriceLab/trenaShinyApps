@@ -164,7 +164,6 @@ server <- function(session, input, output){
       }) # observe row selection event
 
 
-
 } # server
 #------------------------------------------------------------------------------------------------------------------------
 app <- shinyApp(ui, server)
