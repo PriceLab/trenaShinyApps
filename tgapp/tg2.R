@@ -23,6 +23,8 @@ colorNumber <- 0
 state <- new.env(parent=emptyenv())
 state$models <- list()
 #------------------------------------------------------------------------------------------------------------------------
+model.count <- 0   # for creating default model names
+#------------------------------------------------------------------------------------------------------------------------
 genomeName <- "hg38"
 #targetGene <- list(hugo="PSG1", ensembl="ENSG00000231924", combined="ENSG00000231924|PSG1")
 #dataDirectory <- system.file(package="TrenaGenePlacentaData", "extdata")
@@ -82,21 +84,24 @@ createBuildModelTab <- function()
              h4("Build trena regulatory model from DNase footprints in the genomic region currently displayed in IGV, with these constraints:"),
              br(),
              fluidRow(
-                column(2, offset=1, checkboxGroupInput("footprintDatabases", "Footprint Databases",
+                column(3, offset=1, checkboxGroupInput("footprintDatabases", "Footprint Databases",
                                             footprintDatabases, selected=footprintDatabases[1])),
-                column(2, radioButtons("intersectWithRegions", "Intersect footprints with:",
+                column(4, radioButtons("intersectWithRegions", "Intersect footprints with:",
                                              c("GeneHancer" = "genehancer",
                                                "Encode DHS" = "encodeDHS",
                                                "GeneHancer OR Encode DHS" = "geneHancerOrEncode",
                                                "GeneHancer AND Encode DHS" = "geneHancerPlusEncode",
                                                "Use all footprints in region" = "allDNAForFootprints"),
-                                            selected="allDNAForFootprints")),
-                column(3, selectInput("expressionSet", "With this gene expression dataset:",
-                                      expressionMatrixNames))),
-             br(),
-             fluidRow(column(width=3, offset=3, textInput("modelNameTextInput", "Model name", width=240))),
-             fluidRow(column(width=1, offset=3, actionButton("buildModelButton", "Build model"))),
-             fluidRow(column(width=1, offset=3, textOutput("buildInProgressTextArea")))
+                                       selected="allDNAForFootprints")),
+                column(3, radioButtons("motifMapping", "Map motifs to TFs via:",
+                                       c("MotifDb", "TFClass", "MotifDb + TFClass"),
+                                       selected="MotifDb"))
+                ),
+             fluidRow(
+                column(6, selectInput("expressionSet", "With this gene expression dataset:", expressionMatrixNames)),
+                column(5, textInput("modelNameTextInput", "Model name", width=500))),
+             fluidRow(column(width=1, offset=4, actionButton("buildModelButton", "Build model"))),
+             fluidRow(wellPanel(column(width=1, offset=4, textOutput("buildInProgressTextArea"))))
              ) # tabItem
 
    return(tab)
@@ -432,6 +437,9 @@ buildModel <- function(session, input, output)
    model.name <- sprintf("trena.model.%s", input$modelNameTextInput)
    footprint.database.names <- input$footprintDatabases
    tracks.to.intersect.with <- input$intersectWithRegions
+   motifMapping <- isolate(input$motifMapping)
+   if(tolower(motifMapping) == "motifdb + tfclass")
+      motifMapping <- c("MotifDb", "TFClass")
    expressionMatrixName <- input$expressionSet
    full.roi <- state$chromLocRegion
    chrom.loc <- trena::parseChromLocString(full.roi)
@@ -452,7 +460,8 @@ buildModel <- function(session, input, output)
                 tss,
                 expressionMatrixName,
                 tracks.to.intersect.with,
-                footprint.database.names)
+                footprint.database.names,
+                motifMapping)
 
 } # buildModel
 #------------------------------------------------------------------------------------------------------------------------
@@ -462,7 +471,8 @@ run.trenaSGM <- function(trenaGene,
                          tss,
                          expression.matrix.name,
                          tracks.to.intersect.with,
-                         footprint.database.names)
+                         footprint.database.names,
+                         motifMapping)
 {
    printf("--- entering run.trenaSGM")
       # no search for overlaps just yet: ignore "tracks.to.intersect.with"
@@ -481,12 +491,12 @@ run.trenaSGM <- function(trenaGene,
                       databases=footprint.database.names,
                       motifDiscovery="builtinFimo",
                       tfPool=allKnownTFs(identifierType="geneSymbol"),
-                      tfMapping="MotifDB",
+                      tfMapping=motifMapping,
                       tfPrefilterCorrelation=0.2,
                       annotationDbFile=dbfile(org.Hs.eg.db),
                       orderModelByColumn="pearsonCoeff",
                       solverNames=c("lasso", "lassopv", "pearson", "randomForest", "ridge", "spearman"))
-     save(build.spec, file=sprintf("%s.buildSpec.Rdata", model.name))
+     save(build.spec, file=sprintf("%s.buildSpec.RData", model.name))
 
      #------------------------------------------------------------
      # use the above build.spec: a small region, high correlation
