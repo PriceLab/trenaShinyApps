@@ -114,7 +114,7 @@ run.trenaSGM <- function(trenaGene,
                       motifDiscovery="builtinFimo",
                       tfPool=allKnownTFs(identifierType="geneSymbol"),
                       tfMapping="MotifDB",
-                      tfPrefilterCorrelation=0.1,
+                      tfPrefilterCorrelation=0.2,
                       annotationDbFile=dbfile(org.Hs.eg.db),
                       orderModelByColumn="pearsonCoeff",
                       solverNames=c("lasso", "lassopv", "pearson", "randomForest", "ridge", "spearman"))
@@ -125,7 +125,7 @@ run.trenaSGM <- function(trenaGene,
      # required, MotifDb for motif/tf lookup
      #------------------------------------------------------------
 
-   fpBuilder <- FootprintDatabaseModelBuilder(genomeName, targetGene$hugo, build.spec, quiet=TRUE)
+   fpBuilder <- FootprintDatabaseModelBuilder(genomeName, targetGene$hugo, build.spec, quiet=FALSE)
    x <- build(fpBuilder)
    printf("back from build, top 10 tfs:")
    print(head(x$model, n=10))

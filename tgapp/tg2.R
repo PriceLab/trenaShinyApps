@@ -15,6 +15,11 @@ library(TrenaGene)
 library(TrenaGeneDataPlacenta)
 library(TrenaGeneDataSkin)
 #------------------------------------------------------------------------------------------------------------------------
+library(RColorBrewer)
+colors <- brewer.pal(8, "Dark2")
+totalColorCount <- length(colors)
+colorNumber <- 0
+#------------------------------------------------------------------------------------------------------------------------
 state <- new.env(parent=emptyenv())
 state$models <- list()
 #------------------------------------------------------------------------------------------------------------------------
@@ -104,15 +109,15 @@ createBody <- function()
       tabItems(
          tabItem(tabName="igvAndTable",
             fluidRow(
-               column(width=9, id="igvColumn", igvShinyOutput('igvShiny', height="800px")),
+               column(width=9, id="igvColumn", igvShinyOutput('igvShiny', height="2000px")),
                column(width=3, id="dataTableColumn",
                       selectInput("modelSelector", NULL,  "- no models yet -"),
                       DTOutput("table"),
                       br(),
-                      wellPanel(
-                        h4("TF selection displays:"),
-                        selectInput("selectRowAction", NULL,  c("Footprints", "ChIP-seq hits",
-                                                                sprintf("Plot expression, TF vs %s", targetGene$hugo))))
+                      #wellPanel(
+                        h4("TF selection will display:"),
+                        selectInput("selectRowAction", NULL,  c("(no action)", "Footprints", "ChIP-seq hits",
+                                                                sprintf("Plot expression, TF vs %s", targetGene$hugo)))
                       ) # column
                ) # fluidRow
             ), # tabItem 1
@@ -177,15 +182,14 @@ server <- function(session, input, output){
    observeEvent(input$table_rows_selected, {
       selectedTableRow <- isolate(input$table_rows_selected)
       printf("row selected: %d", selectedTableRow)
-      #printf("car selected: %s", rownames(mtcars)[selectedTableRow])
-      tfSelectionAction <- isolate(input$selectRowAction)
-      printf("table row clicked, - actionRequested: %s", tfSelectionAction);
-      current.model.name <- isolate(input$modelSelector)
-      if(current.model.name %in% ls(state$models)){
-         tf.names <- state$models[[current.model.name]]$model$gene
-         tf.name <- tf.names[selectedTableRow]
-         printf("tf: %s", tf.name)
-         }
+      dispatch.rowClickInModelTable(session, input, output, selectedTableRow)
+      #current.model.name <- isolate(input$modelSelector)
+      #if(current.model.name %in% ls(state$models)){
+      #   tf.names <- state$models[[current.model.name]]$model$gene
+      #   tf.name <- tf.names[selectedTableRow]
+      #   printf("tf: %s", tf.name)
+      #} else {
+      #   printf("failed to find %s in current model %s",
       }) # observe row selection event
 
    observeEvent(input$currentGenomicRegion, {
@@ -531,5 +535,65 @@ displayModel <- function(session, input, output, tbl.model, new.model.name)
 
 } # displayModel
 #------------------------------------------------------------------------------------------------------------------------
+dispatch.rowClickInModelTable <- function(session, input, output, selectedTableRow)
+{
+      #current.model.name <- isolate(input$modelSelector)
+      #if(current.model.name %in% ls(state$models)){
+      #   printf("tf: %s", tf.name)
 
+   current.model.name <- isolate(input$modelSelector)
+   tf.names <- state$models[[current.model.name]]$model$gene
+   if(length(tf.names) > 20) tf.names <- tf.names[1:20]
+   tf.name <- tf.names[selectedTableRow]
+   action.name     <- isolate(input$selectRowAction)
+   expression.matrix.name <- isolate(input$expressionSet)
+   #printf("%s of model %s, expression.set %s: %s", tf.name, current.model.name, expression.matrix.name, action.name)
+   # browser()
+   xyz <- "botton of dispatch.rowClick"
+
+   if(action.name == "Footprints"){
+      tbl.fp <- state$models[[current.model.name]]$regulatoryRegions
+      tbl.fp.tf <- subset(tbl.fp, geneSymbol==tf.name)
+      dups <- which(duplicated(tbl.fp.tf$loc))
+      if(length(dups) > 0)
+         tbl.fp.tf <- tbl.fp.tf[-dups,]
+      tbl.tmp <- tbl.fp.tf[ c("chrom", "fp_start", "fp_end", "shortMotif")]
+      colnames(tbl.tmp) <- c("chrom", "start", "end", "name")
+      colorNumber <<- (colorNumber %% totalColorCount) + 1
+      next.color <- colors[colorNumber]
+      loadBedTrack(session, sprintf("FP-%s", tf.name), tbl.tmp, color=next.color, trackHeight=25)
+      } # if footprints
+
+   if(action.name == "ChIP-seq hits"){
+      full.roi <- state$chromLocRegion
+      chrom.loc <- trena::parseChromLocString(full.roi)
+      if(!exists("tbl.chipSeq")){
+         printf("=== retrieving chip-seq data from database")
+         tbl.chipSeq <<- with(chrom.loc, getChipSeq(trenaGene, chrom, start, end,  tf.names))
+         printf("hits among all tfs in this model: %d", nrow(tbl.chipSeq))
+         }
+      tbl.hits <- subset(tbl.chipSeq, tf == tf.name)
+      printf("ChIP-seq hits for %s: %d", tf.name, nrow(tbl.hits))
+      if(nrow(tbl.hits) > 0){
+         tbl.tmp <- tbl.hits[, c("chr", "start", "end", "name")]
+         colorNumber <<- (colorNumber %% totalColorCount) + 1
+         next.color <- colors[colorNumber]
+         loadBedTrack(session, sprintf("Cs-%s", tf.name), tbl.tmp, color=next.color, trackHeight=25)
+         }
+      } # ChIP-seq hits
+
+
+} # dispatch.rowClickInModelTable
+#------------------------------------------------------------------------------------------------------------------------
+display.chipseq.track <- function(session, input, output, tf)
+{
+
+} # display.chipseq.track
+#------------------------------------------------------------------------------------------------------------------------
+display.footprint.track <- function(session, input, output, tf)
+{
+   model.name <- isolate(input$modelSelector)
+
+} # display.footprint.track
+#------------------------------------------------------------------------------------------------------------------------
 app <- shinyApp(ui, server)
