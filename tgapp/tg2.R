@@ -44,6 +44,20 @@ footprintDatabases <- getFootprintDatabaseNames(getGeneData(trenaGene))
 tbl.transcripts <- getTranscriptsTable(trenaGene)
 
 #------------------------------------------------------------------------------------------------------------------------
+runTinyTrena <- function()
+{
+  f <- "./trena.model.1kdemo.buildSpec.RData"
+  genomeName <- "hg38"
+  targetGene <- "COL1A1"
+  message(load(f))
+
+  fpBuilder <- FootprintDatabaseModelBuilder(genomeName, targetGene, build.spec, quiet=FALSE)
+  x <- build(fpBuilder)
+  message(paste(head(x$model$gene, n=10),  collapse=", "))
+  message("all done")
+
+} # runTinyTrena
+#------------------------------------------------------------------------------------------------------------------------
 # calculate the initial igv region, using the (typically? always? single transcripted designated as "gene"
 #------------------------------------------------------------------------------------------------------------------------
 tbl.gene <- subset(tbl.transcripts, moleculetype=="gene")[1,]
@@ -101,7 +115,8 @@ createBuildModelTab <- function()
                 column(6, selectInput("expressionSet", "With this gene expression dataset:", expressionMatrixNames)),
                 column(5, textInput("modelNameTextInput", "Model name", width=500))),
              fluidRow(column(width=1, offset=4, actionButton("buildModelButton", "Build model"))),
-             fluidRow(wellPanel(column(width=1, offset=4, textOutput("buildInProgressTextArea"))))
+             wellPanel(style="overflow-y:scroll; height:200px", pre(id = "console"))
+             #fluidRow(wellPanel(column(width=1, offset=4, textOutput("buildInProgressTextArea"))))
              ) # tabItem
 
    return(tab)
@@ -420,14 +435,27 @@ setupBuildModel <- function(session, input, output)
 
    observeEvent(input$buildModelButton, {
       getGenomicRegion(session)
-      buildModel(session, input, output)
-      printf("back from buildModel, current models are %s", paste(names(state$models), collapse=", "))
-      model.count <- length(state$models)
-      new.model.name <- names(state$models)[model.count]
-      new.table <- state$models[[model.count]]$model
-      output$buildInProgressTextArea <- renderText("build complete")
-      displayModel(session, input, output, new.table, new.model.name)
-      updateTabItems(session, "sidebarMenu", select="igvAndTable")
+      shinyjs::html(id="console", html="", add=FALSE)
+      withCallingHandlers(
+                          {buildModel(session, input, output);
+                           model.count <- length(state$models)
+                           new.model.name <- names(state$models)[model.count]
+                           new.table <- state$models[[model.count]]$model
+                           displayModel(session, input, output, new.table, new.model.name)
+                           updateTabItems(session, "sidebarMenu", select="igvAndTable")
+                           },
+         message=function(m){
+            #printf("got message for console");
+            #print(m)
+            shinyjs::html(id="console", html=m$message, add=TRUE)
+            })
+      #message(sprintf("back from buildModel, current models are %s", paste(names(state$models), collapse=", ")))
+      #model.count <- length(state$models)
+      #new.model.name <- names(state$models)[model.count]
+      #new.table <- state$models[[model.count]]$model
+      #output$buildInProgressTextArea <- renderText("build complete")
+      #displayModel(session, input, output, new.table, new.model.name)
+      #updateTabItems(session, "sidebarMenu", select="igvAndTable")
       })
 
 } # setupBuildModel
@@ -435,6 +463,7 @@ setupBuildModel <- function(session, input, output)
 buildModel <- function(session, input, output)
 {
    model.name <- sprintf("trena.model.%s", input$modelNameTextInput)
+   message(sprintf("about to build '%s'", model.name))
    footprint.database.names <- input$footprintDatabases
    tracks.to.intersect.with <- input$intersectWithRegions
    motifMapping <- isolate(input$motifMapping)
@@ -443,10 +472,10 @@ buildModel <- function(session, input, output)
    expressionMatrixName <- input$expressionSet
    full.roi <- state$chromLocRegion
    chrom.loc <- trena::parseChromLocString(full.roi)
-   printf("  fpdb: %s", paste(footprintDatabases, collapse=", "))
-   printf("   roi: %s", full.roi)
-   printf("   mtx: %s", expressionMatrixName)
-   printf("  intersect with: %s", paste(tracks.to.intersect.with, collapse=","))
+   message(sprintf("  fpdb: %s", paste(footprintDatabases, collapse=", ")))
+   message(sprintf("   roi: %s", full.roi))
+   message(sprintf("   mtx: %s", expressionMatrixName))
+   message(printf("  intersect with: %s", paste(tracks.to.intersect.with, collapse=",")))
 
    tbl.gene <- subset(tbl.transcripts, moleculetype=="gene")[1,]
    strand <- tbl.gene$strand
@@ -474,12 +503,12 @@ run.trenaSGM <- function(trenaGene,
                          footprint.database.names,
                          motifMapping)
 {
-   printf("--- entering run.trenaSGM")
+   message(sprintf("--- entering run.trenaSGM"))
       # no search for overlaps just yet: ignore "tracks.to.intersect.with"
    tbl.regions <- data.frame(chrom=chromosome, start=start.loc, end=end.loc, stringsAsFactors=FALSE)
    mtx <- loadExpressionData(trenaGene, expression.matrix.name)
    geneSymbol <- getGeneSymbol(getGeneData(trenaGene))
-   printf("tbl.regions, width: %d", with(tbl.regions, end - start))
+   message(sprintf("tbl.regions, width: %d", with(tbl.regions, end - start)))
 
    build.spec <- list(title=model.name,
                       type="footprint.database",
@@ -505,8 +534,8 @@ run.trenaSGM <- function(trenaGene,
 
    fpBuilder <- FootprintDatabaseModelBuilder(genomeName, targetGene$hugo, build.spec, quiet=FALSE)
    x <- build(fpBuilder)
-   printf("back from build, top 10 tfs:")
-   print(head(x$model, n=10))
+   message(sprintf("back from build, top 10 tfs:"))
+   message(head(x$model, n=10))
    state$models[[model.name]] <- x
 
 } # run.trenaSGM
