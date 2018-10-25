@@ -6,6 +6,9 @@ library(shinyjs)
 library(later)
 library(igvShiny)
 library(DT)
+library(VariantAnnotation)
+#------------------------------------------------------------------------------------------------------------------------
+addResourcePath("tracks", "tracks")
 #------------------------------------------------------------------------------------------------------------------------
 library(trenaSGM)
 library(TrenaProjectIGAP)
@@ -21,7 +24,7 @@ state$models <- list()
 model.count <- 0   # for creating default model names
 #------------------------------------------------------------------------------------------------------------------------
 igap <- TrenaProjectIGAP();
-setTargetGene(igap, "INPP5D")
+setTargetGene(igap, getSupportedGenes(igap)[1])
 
 expressionMatrixNames <- getExpressionMatrixNames(igap)
 tbl.enhancers <- getEnhancers(igap)
@@ -33,12 +36,12 @@ tbl.transcripts <- getTranscriptsTable(igap)
 #------------------------------------------------------------------------------------------------------------------------
 # calculate the initial igv region, using the (typically? always? single transcripted designated as "gene"
 #------------------------------------------------------------------------------------------------------------------------
-tbl.gene <- subset(tbl.transcripts, moleculetype=="gene")[1,]
-start <- tbl.gene$start
-end   <- tbl.gene$endpos
-chrom <- tbl.gene$chr
-padding <- round(0.25 * (end-start))
-initial.chromLoc <- sprintf("%s:%d-%d", chrom, start-padding, end+padding)
+# tbl.gene <- subset(tbl.transcripts, moleculetype=="gene")[1,]
+# start <- tbl.gene$start
+# end   <- tbl.gene$endpos
+# chrom <- tbl.gene$chr
+# padding <- round(0.25 * (end-start))
+# initial.chromLoc <- sprintf("%s:%d-%d", chrom, start-padding, end+padding)
 #------------------------------------------------------------------------------------------------------------------------
 createSidebar <- function()
 {
@@ -147,9 +150,6 @@ ui <- dashboardPage(
           border: 1px solid black;
           border-radius: 5px;
           }
-        #sidebarCollapsed{
-          background: lightgray;
-          }
        '))),
      createBody()),
   useShinyjs()
@@ -162,13 +162,15 @@ server <- function(session, input, output){
        newGene <- isolate(input$chooseGene)
        setTargetGene(igap, newGene)
        printf("igap targetGene: %s", getTargetGene(igap))
-       showGenomicRegion(session, newGene)
+       shinyjs::html(selector=".logo", html=sprintf("trena %s", newGene), add=FALSE)
+       showGenomicRegion(session, getGeneRegion(igap, flankingPercent=20))
+       loadAndDisplayRelevantVariants(session, newGene)
        })
 
 
    output$igvShiny <- renderIgvShiny({
       options <- list(genomeName="hg38",
-                      initialLocus=initial.chromLoc,
+                      initialLocus=getGeneRegion(igap, flankingPercent=20),
                       displayMode="EXPANDED",
                       trackHeight=300)
       igvShiny(options) # , height=800)
@@ -210,10 +212,10 @@ server <- function(session, input, output){
    setupDisplayRegion(session, input, output)
    setupBuildModel(session, input, output)
 
-   later(function(){
-            state$chromLocRegion <- initial.chromLoc
-            showGenomicRegion(session, initial.chromLoc)
-            }, 2)
+   #later(function(){
+   #         state$chromLocRegion <- initial.chromLoc
+   #         showGenomicRegion(session, initial.chromLoc)
+   #         }, 2)
 
 } # server
 #------------------------------------------------------------------------------------------------------------------------
@@ -623,5 +625,26 @@ display.footprint.track <- function(session, input, output, tf)
    model.name <- isolate(input$modelSelector)
 
 } # display.footprint.track
+#------------------------------------------------------------------------------------------------------------------------
+loadAndDisplayRelevantVariants <- function(session, newGene)
+{
+   variant.filenames <- getVariantDatasetNames(igap)
+   short.names <- names(variant.filenames)
+   file.paths <- unlist(variant.filenames, use.names=FALSE)
+   vcf.file.indices <- grep(".vcf", short.names, ignore.case=TRUE)
+   thisGene.indices <- grep(newGene, short.names, ignore.case=TRUE)
+   final.indices <- intersect(vcf.file.indices, thisGene.indices)
+
+   if(length(final.indices) == 0)
+      return()
+
+   current.gene.vcf.files <- file.paths[final.indices]
+   for(i in seq_len(length(current.gene.vcf.files))){
+      vcfFile <- current.gene.vcf.files[i]
+      vcfData <- readVcf(vcfFile)
+      loadVcfTrack(session, "vcf", vcfData)
+      }
+
+} # loadAndDisplayRelevantVariants
 #------------------------------------------------------------------------------------------------------------------------
 app <- shinyApp(ui, server)
