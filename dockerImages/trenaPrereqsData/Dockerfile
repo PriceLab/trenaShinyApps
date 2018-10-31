@@ -1,4 +1,4 @@
-FROM bioconductor/devel_core2:latest
+FROM bioconductor/release_core2:latest
 USER root
 RUN useradd -ms /bin/bash trena
 user trena
