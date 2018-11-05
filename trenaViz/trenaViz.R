@@ -30,10 +30,10 @@ trenaProject <- TrenaProjectSkin();
 setTargetGene(trenaProject, getSupportedGenes(trenaProject)[1])
 state$chromLocRegion <- getGeneRegion(trenaProject, flankingPercent=20)
 expressionMatrixNames <- getExpressionMatrixNames(trenaProject)
-tbl.enhancers <- getEnhancers(trenaProject)
-tbl.dhs <- getEncodeDHS(trenaProject)
+state$tbl.enhancers <- getEnhancers(trenaProject)
+state$tbl.dhs <- getEncodeDHS(trenaProject)
 footprintDatabases <- getFootprintDatabaseNames(trenaProject)
-tbl.transcripts <- getTranscriptsTable(trenaProject)
+state$tbl.transcripts <- getTranscriptsTable(trenaProject)
 
 
 #------------------------------------------------------------------------------------------------------------------------
@@ -178,6 +178,9 @@ server <- function(session, input, output){
        newGene <- isolate(input$chooseGene)
        setTargetGene(trenaProject, newGene)
        printf("igap targetGene: %s", getTargetGene(trenaProject))
+       state$tbl.enhancers <- getEnhancers(trenaProject)
+       state$tbl.dhs <- getEncodeDHS(trenaProject)
+       state$tbl.transcripts <- getTranscriptsTable(trenaProject)
        shinyjs::html(selector=".logo", html=sprintf("trena %s", newGene), add=FALSE)
        showGenomicRegion(session, getGeneRegion(trenaProject, flankingPercent=20))
        loadAndDisplayRelevantVariants(session, newGene)
@@ -304,9 +307,9 @@ mapToChromLoc <- function(regionName)
       }
 
    if(regionName == "enhancersRegion"){
-      chrom <- tbl.enhancers$chrom[1]
-      start <- min(tbl.enhancers$start) - 10000
-      end   <- max(tbl.enhancers$end) + 10000
+      chrom <- state$tbl.enhancers$chrom[1]
+      start <- min(state$tbl.enhancers$start) - 10000
+      end   <- max(state$tbl.enhancers$end) + 10000
       roi <- sprintf("%s:%d-%d", chrom, start, end)
       }
 
@@ -497,7 +500,7 @@ buildModel <- function(session, input, output)
    message(sprintf("   mtx: %s", expressionMatrixName))
    message(printf("  intersect with: %s", paste(tracks.to.intersect.with, collapse=",")))
 
-   tbl.gene <- subset(tbl.transcripts, moleculetype=="gene")[1,]
+   tbl.gene <- subset(state$tbl.transcripts, moleculetype=="gene")[1,]
    strand <- tbl.gene$strand
    tss <- tbl.gene$start
    if(strand == "-")
@@ -525,11 +528,15 @@ run.trenaSGM <- function(trenaProject,
 {
    message(sprintf("--- entering run.trenaSGM"))
       # no search for overlaps just yet: ignore "tracks.to.intersect.with"
-   tbl.regions <- buildRegionsTable(tracks.to.intersect.with, chromosome, start.loc, end.loc, tbl.enhancers, tbl.dhs)
+   #browser()
+   tbl.regions <- buildRegionsTable(tracks.to.intersect.with, chromosome, start.loc, end.loc,
+                                    state$tbl.enhancers, state$tbl.dhs)
    #tbl.regions <- data.frame(chrom=chromosome, start=start.loc, end=end.loc, stringsAsFactors=FALSE)
    mtx <- getExpressionMatrix(trenaProject, expression.matrix.name)
    geneSymbol <- getTargetGene(trenaProject)
-   message(sprintf("tbl.regions, width: %d", with(tbl.regions, end - start)))
+   for(r in seq_len(nrow(tbl.regions))){
+      message(sprintf("tbl.regions, width: %d", with(tbl.regions[r,], end - start)))
+      }
 
    build.spec <- list(title=model.name,
                       type="footprint.database",
@@ -567,6 +574,7 @@ buildRegionsTable <- function(tracks.to.intersect.with, chromosome, start.loc, e
    if(tracks.to.intersect.with == "allDNAForFootprints")
       return(data.frame(chrom=chromosome, start=start.loc, end=end.loc, stringsAsFactors=FALSE))
 
+   #browser()
    gr.region <- GRanges(seqnames=chromosome, IRanges(start.loc, end.loc))
    gr.enhancers <- GRanges(tbl.enhancers)
    gr.dhs <- GRanges(tbl.dhs)
