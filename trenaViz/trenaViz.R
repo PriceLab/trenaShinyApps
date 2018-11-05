@@ -11,7 +11,7 @@ library(VariantAnnotation)
 addResourcePath("tracks", "tracks")
 #------------------------------------------------------------------------------------------------------------------------
 library(trenaSGM)
-library(TrenaProjectIGAP)
+library(TrenaProjectSkin)
 #------------------------------------------------------------------------------------------------------------------------
 library(RColorBrewer)
 colors <- brewer.pal(8, "Dark2")
@@ -22,12 +22,13 @@ MAX.TF.COUNT <- 50   # we display the top max.tf.cout TFs coming back from trena
 #------------------------------------------------------------------------------------------------------------------------
 state <- new.env(parent=emptyenv())
 state$models <- list()
+state$tbl.chipSeq <- NULL
 #------------------------------------------------------------------------------------------------------------------------
 model.count <- 0   # for creating default model names
 #------------------------------------------------------------------------------------------------------------------------
-trenaProject <- TrenaProjectIGAP();
+trenaProject <- TrenaProjectSkin();
 setTargetGene(trenaProject, getSupportedGenes(trenaProject)[1])
-
+state$chromLocRegion <- getGeneRegion(trenaProject, flankingPercent=20)
 expressionMatrixNames <- getExpressionMatrixNames(trenaProject)
 tbl.enhancers <- getEnhancers(trenaProject)
 tbl.dhs <- getEncodeDHS(trenaProject)
@@ -57,13 +58,12 @@ createSidebar <- function()
         actionButton(inputId = "igvHideButton", label = "Toggle IGV"),
         actionButton(inputId = "tableHideButton", label = "Toggle table"),
         selectInput("chooseGene", "Choose Gene:", c("", getSupportedGenes(trenaProject))),
-
-        selectInput("addTrack", "Add Track:",
-                    c("",
-                     "Enhancers"="enhancers",
-                     "DHS open chromatin (encode, clustered)"="dhs",
-                     "IGAP GWAS variants"="gwas"
-                     )),
+        selectInput("addTrack", "Add Track:", additionalTracksOnOffer()),
+                   # c("",
+                   #  "Enhancers"="enhancers",
+                   #  "DHS open chromatin (encode, clustered)"="dhs",
+                   #  "IGAP GWAS variants"="gwas"
+                   #  )),
         selectInput("displayGenomicRegion", "Display Genomic Region:",
                     c("",
                       "Full Gene" = "fullGeneRegion",
@@ -73,6 +73,19 @@ createSidebar <- function()
      ) # dashboardSidebar
 
 } # createSidebar
+#------------------------------------------------------------------------------------------------------------------------
+additionalTracksOnOffer <- function()
+{
+   trackOfferings <- list("",
+                          "Enhancers"="enhancers",
+                          "DHS open chromatin (encode, clustered)"="dhs")
+   variantTrackNames <- getVariantDatasetNames(trenaProject)
+   if(length(variantTrackNames) > 0)
+      trackOfferings <- c(trackOfferings, variantTrackNames)
+
+   return(trackOfferings)
+
+} # additionalTracksOnOffer
 #------------------------------------------------------------------------------------------------------------------------
 createBuildModelTab <- function()
 {
@@ -441,6 +454,7 @@ setupBuildModel <- function(session, input, output)
 
    observeEvent(input$buildModelButton, {
       getGenomicRegion(session)
+      state$tbl.chipSeq <- NULL   # this will force a fresh database query after model is built
       shinyjs::html(id="console", html="", add=FALSE)  # clear the console
       withCallingHandlers(
                           {buildModel(session, input, output);
@@ -531,7 +545,7 @@ run.trenaSGM <- function(trenaProject,
                       annotationDbFile=dbfile(org.Hs.eg.db),
                       orderModelByColumn="pearsonCoeff",
                       solverNames=c("lasso", "lassopv", "pearson", "randomForest", "ridge", "spearman"))
-     save(build.spec, file=sprintf("%s.buildSpec.RData", model.name))
+     # save(build.spec, file=sprintf("%s.buildSpec.RData", model.name))
 
      #------------------------------------------------------------
      # use the above build.spec: a small region, high correlation
@@ -613,12 +627,16 @@ dispatch.rowClickInModelTable <- function(session, input, output, selectedTableR
    if(action.name == "ChIP-seq hits"){
       full.roi <- state$chromLocRegion
       chrom.loc <- trena::parseChromLocString(full.roi)
-      if(!exists("tbl.chipSeq")){
-         showNotificationx("retrieving ChIP-seq data from database...")
-         tbl.chipSeq <<- with(chrom.loc, getChipSeq(trenaProject, chrom, start, end,  tf.names))
-         showNotification("ChIP-seq hits across all TFs in this model: %d", nrow(tbl.chipSeq))
+      if(is.null(state$tbl.chipSeq)){
+         showNotification("retrieving ChIP-seq data from database...")
+         tbl.chipSeq <- with(chrom.loc, getChipSeq(trenaProject, chrom, start, end,  tf.names))
+         save(tbl.chipSeq, file="tbl.chipSeq.RData")
+         state$tbl.chipSeq <- tbl.chipSeq
+         hit.count <- nrow(state$tbl.chipSeq)
+         printf("chipSeq hit.count: %d", hit.count)
+         showNotification(sprintf("ChIP-seq hits across all TFs in this model: %d", hit.count))
          }
-      tbl.hits <- subset(tbl.chipSeq, tf == tf.name)
+      tbl.hits <- subset(state$tbl.chipSeq, tf == tf.name)
       showNotification(sprintf("ChIP-seq hits for %s: %d", tf.name, nrow(tbl.hits)), type="message")
       if(nrow(tbl.hits) > 0){
          tbl.tmp <- tbl.hits[, c("chrom", "start", "endpos", "name")]
@@ -628,7 +646,6 @@ dispatch.rowClickInModelTable <- function(session, input, output, selectedTableR
          loadBedTrack(session, sprintf("Cs-%s", tf.name), tbl.tmp, color=next.color, trackHeight=25)
          }
       } # ChIP-seq hits
-
 
 } # dispatch.rowClickInModelTable
 #------------------------------------------------------------------------------------------------------------------------
