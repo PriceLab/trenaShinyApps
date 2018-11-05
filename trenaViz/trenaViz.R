@@ -8,8 +8,6 @@ library(igvShiny)
 library(DT)
 library(VariantAnnotation)
 #------------------------------------------------------------------------------------------------------------------------
-addResourcePath("tracks", "tracks")
-#------------------------------------------------------------------------------------------------------------------------
 library(trenaSGM)
 library(TrenaProjectSkin)
 #------------------------------------------------------------------------------------------------------------------------
@@ -26,15 +24,31 @@ state$tbl.chipSeq <- NULL
 #------------------------------------------------------------------------------------------------------------------------
 model.count <- 0   # for creating default model names
 #------------------------------------------------------------------------------------------------------------------------
-trenaProject <- TrenaProjectSkin();
+# in interactive sessions, projectName should already be defined, eg, projectName <- "TrenaProjectIGAP"
+# for non-interactive sessions, we require the projectName to be defined on the command line:
+#  R -f trenaViz.R --args TrenaProjectIGAP
+
+args <- commandArgs(trailingOnly=TRUE)
+
+if(length(args) == 1)
+   projectName <- args[1]
+
+stopifnot(exists("projectName"))
+
+library(projectName, character.only=TRUE)
+initialization.command <- sprintf("trenaProject <- %s()", projectName)
+eval(parse(text=initialization.command))
 setTargetGene(trenaProject, getSupportedGenes(trenaProject)[1])
+printf("targetGene: %s", getTargetGene(trenaProject))
+#trenaProject <- TrenaProjectSkin();
+#setTargetGene(trenaProject, getSupportedGenes(trenaProject)[1])
+
 state$chromLocRegion <- getGeneRegion(trenaProject, flankingPercent=20)
 expressionMatrixNames <- getExpressionMatrixNames(trenaProject)
 state$tbl.enhancers <- getEnhancers(trenaProject)
 state$tbl.dhs <- getEncodeDHS(trenaProject)
 footprintDatabases <- getFootprintDatabaseNames(trenaProject)
 state$tbl.transcripts <- getTranscriptsTable(trenaProject)
-
 
 #------------------------------------------------------------------------------------------------------------------------
 # calculate the initial igv region, using the (typically? always? single transcripted designated as "gene"
@@ -774,3 +788,6 @@ loadAndDisplayRelevantVariants <- function(session, newGene)
 } # loadAndDisplayRelevantVariants
 #------------------------------------------------------------------------------------------------------------------------
 app <- shinyApp(ui, server)
+
+runApp(app)
+
