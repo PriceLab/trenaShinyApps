@@ -99,7 +99,7 @@ createBuildModelTab <- function()
                                              c("GeneHancer" = "genehancer",
                                                "Encode DHS" = "encodeDHS",
                                                "GeneHancer OR Encode DHS" = "geneHancerOrEncode",
-                                               "GeneHancer AND Encode DHS" = "geneHancerPlusEncode",
+                                               "GeneHancer AND Encode DHS" = "geneHancerAndEncode",
                                                "Use all footprints in region" = "allDNAForFootprints"),
                                        selected="allDNAForFootprints")),
                 column(3, radioButtons("motifMapping", "Map motifs to TFs via:",
@@ -525,7 +525,8 @@ run.trenaSGM <- function(trenaProject,
 {
    message(sprintf("--- entering run.trenaSGM"))
       # no search for overlaps just yet: ignore "tracks.to.intersect.with"
-   tbl.regions <- data.frame(chrom=chromosome, start=start.loc, end=end.loc, stringsAsFactors=FALSE)
+   tbl.regions <- buildRegionsTable(tracks.to.intersect.with, chromosome, start.loc, end.loc, tbl.enhancers, tbl.dhs)
+   #tbl.regions <- data.frame(chrom=chromosome, start=start.loc, end=end.loc, stringsAsFactors=FALSE)
    mtx <- getExpressionMatrix(trenaProject, expression.matrix.name)
    geneSymbol <- getTargetGene(trenaProject)
    message(sprintf("tbl.regions, width: %d", with(tbl.regions, end - start)))
@@ -560,6 +561,89 @@ run.trenaSGM <- function(trenaProject,
    state$models[[model.name]] <- x
 
 } # run.trenaSGM
+#------------------------------------------------------------------------------------------------------------------------
+buildRegionsTable <- function(tracks.to.intersect.with, chromosome, start.loc, end.loc, tbl.enhancers, tbl.dhs)
+{
+   if(tracks.to.intersect.with == "allDNAForFootprints")
+      return(data.frame(chrom=chromosome, start=start.loc, end=end.loc, stringsAsFactors=FALSE))
+
+   gr.region <- GRanges(seqnames=chromosome, IRanges(start.loc, end.loc))
+   gr.enhancers <- GRanges(tbl.enhancers)
+   gr.dhs <- GRanges(tbl.dhs)
+     # strip off metadata so that the regions can be combined
+   mcols(gr.region) <- NULL
+   mcols(gr.enhancers) <- NULL
+   mcols(gr.dhs) <- NULL
+   gr.enhancers.or.dhs <- c(gr.enhancers, gr.dhs)
+   gr.enhancers.and.dhs <- intersect(gr.enhancers, gr.dhs)
+
+   #browser()
+   tbl.out  <- switch(tracks.to.intersect.with,
+                  genehancer = {
+                     tbl.ov <- as.data.frame(findOverlaps(gr.enhancers, gr.region, type="any"))
+                     indices <- unique(tbl.ov[,1])
+                     as.data.frame(gr.enhancers[indices])
+                     },
+                  encodeDHS = {
+                     tbl.ov <- as.data.frame(findOverlaps(gr.dhs, gr.region, type="any"))
+                     indices <- unique(tbl.ov[,1])
+                     as.data.frame(gr.dhs[indices])
+                     },
+                  geneHancerOrEncode = {
+                     tbl.ov <- as.data.frame(findOverlaps(gr.enhancers.or.dhs, gr.region, type="any"))
+                     indices <- unique(tbl.ov[,1])
+                     as.data.frame(gr.enhancers.or.dhs[indices], row.names=NULL)
+                     },
+                  geneHancerAndEncode = {
+                     tbl.ov <- as.data.frame(findOverlaps(gr.enhancers.and.dhs, gr.region, type="any"))
+                     indices <- unique(tbl.ov[,1])
+                     as.data.frame(gr.enhancers.and.dhs[indices], row.names=NULL)
+                     })
+
+   tbl.out <- tbl.out[, 1:3]
+   colnames(tbl.out) <- c("chrom", "start", "end")
+   tbl.out$chrom <- as.character(tbl.out$chrom)
+   tbl.out$start <- as.numeric(tbl.out$start)
+   tbl.out$end <- as.numeric(tbl.out$end)
+
+   return(tbl.out)
+
+} # buildRegionsTable
+#------------------------------------------------------------------------------------------------------------------------
+test_buildRegionsTable <- function()
+{
+   library(RUnit)
+   variables.loaded <- load("buildRegionsTable.sampleData.RData")
+   stopifnot(all(c("chromosome", "start.loc", "end.loc", "tbl.dhs", "tbl.enhancers") %in% variables.loaded))
+   intersection.options <- c("genehancer", "encodeDHS", "geneHancerOrEncode",
+                             "geneHancerAndEncode", "allDNAForFootprints")
+
+   tbl.regions <- buildRegionsTable("allDNAForFootprints", chromosome, start.loc, end.loc, tbl.enhancers, tbl.dhs)
+   checkEquals(colnames(tbl.regions), c("chrom", "start", "end"))
+   checkEquals(unlist(lapply(tbl.regions, class), use.names=FALSE), c("character", "numeric", "numeric"))
+   checkEquals(dim(tbl.regions), c(1, 3))
+
+   tbl.regions <- buildRegionsTable("genehancer", chromosome, start.loc, end.loc, tbl.enhancers, tbl.dhs)
+   checkEquals(colnames(tbl.regions), c("chrom", "start", "end"))
+   checkEquals(unlist(lapply(tbl.regions, class), use.names=FALSE), c("character", "numeric", "numeric"))
+   checkEquals(dim(tbl.regions), c(32, 3))
+
+   tbl.regions <- buildRegionsTable("encodeDHS", chromosome, start.loc, end.loc, tbl.enhancers, tbl.dhs)
+   checkEquals(colnames(tbl.regions), c("chrom", "start", "end"))
+   checkEquals(unlist(lapply(tbl.regions, class), use.names=FALSE), c("character", "numeric", "numeric"))
+   checkEquals(dim(tbl.regions), c(2541, 3))
+
+   tbl.regions <- buildRegionsTable("geneHancerOrEncode", chromosome, start.loc, end.loc, tbl.enhancers, tbl.dhs)
+   checkEquals(colnames(tbl.regions), c("chrom", "start", "end"))
+   checkEquals(unlist(lapply(tbl.regions, class), use.names=FALSE), c("character", "numeric", "numeric"))
+   checkEquals(dim(tbl.regions), c(2573, 3))
+
+   tbl.regions <- buildRegionsTable("geneHancerAndEncode", chromosome, start.loc, end.loc, tbl.enhancers, tbl.dhs)
+   checkEquals(colnames(tbl.regions), c("chrom", "start", "end"))
+   checkEquals(unlist(lapply(tbl.regions, class), use.names=FALSE), c("character", "numeric", "numeric"))
+   checkEquals(dim(tbl.regions), c(341, 3))
+
+} # test_buildRegionsTable
 #------------------------------------------------------------------------------------------------------------------------
 # beautify the data.frame, display it in the UI DataTable, update the modelSelector pulldown
 displayModel <- function(session, input, output, tbl.model, new.model.name)
