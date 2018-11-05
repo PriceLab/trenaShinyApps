@@ -191,12 +191,12 @@ server <- function(session, input, output){
    observeEvent(input$chooseGene, ignoreInit=TRUE, {
        newGene <- isolate(input$chooseGene)
        setTargetGene(trenaProject, newGene)
-       printf("igap targetGene: %s", getTargetGene(trenaProject))
+       showGenomicRegion(session, getGeneRegion(trenaProject, flankingPercent=20))
+       printf("new targetGene: %s", getTargetGene(trenaProject))
        state$tbl.enhancers <- getEnhancers(trenaProject)
        state$tbl.dhs <- getEncodeDHS(trenaProject)
        state$tbl.transcripts <- getTranscriptsTable(trenaProject)
        shinyjs::html(selector=".logo", html=sprintf("trena %s", newGene), add=FALSE)
-       showGenomicRegion(session, getGeneRegion(trenaProject, flankingPercent=20))
        loadAndDisplayRelevantVariants(session, newGene)
        })
 
@@ -787,7 +787,11 @@ loadAndDisplayRelevantVariants <- function(session, newGene)
 
 } # loadAndDisplayRelevantVariants
 #------------------------------------------------------------------------------------------------------------------------
-app <- shinyApp(ui, server)
-
+shinyOptions=list(launch.browser=FALSE)
+if(Sys.info()[["nodename"]] == "riptide.local"){
+   shinyOptions <- list(host="0.0.0.0", launch.browser=TRUE)
+   }
+app <- shinyApp(ui, server, options=shinyOptions)
+#app <- shinyApp(ui, server)
 runApp(app)
 
