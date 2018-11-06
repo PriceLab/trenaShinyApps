@@ -1,4 +1,4 @@
-all:  motifDb  trena  igvShiny  cyjShiny
+all:  motifDb  trena  igvShiny  cyjShiny trenaSGM
 
 motifDb:
 	(cd ~/github/MotifDb; git pull)
@@ -7,6 +7,10 @@ motifDb:
 trena:
 	(cd ~/github/trena; git pull)
 	R CMD build --no-build-vignettes ~/github/trena
+
+trenaSGM:
+	(cd ~/github/trenaSGM; git pull)
+	R CMD build --no-build-vignettes ~/github/trenaSGM
 
 
 igvShiny:
