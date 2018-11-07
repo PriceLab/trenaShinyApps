@@ -9,10 +9,10 @@ build:
 	docker build -t trena_skin -f Dockerfile .
 
 bash:
-	docker run -ti --rm -p 60040:3838 trena_skin bash
+	docker run -ti --rm -p 60042:3838 trena_skin bash
 
 dockerRun:
-	docker run -p 60042:3838 inpp5dshinyapp
+	docker run -p 60042:3838 trena_skin
 
 dockerView:
 	open http://localhost:60042

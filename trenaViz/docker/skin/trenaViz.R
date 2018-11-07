@@ -791,7 +791,7 @@ shinyOptions=list(launch.browser=FALSE)
 if(Sys.info()[["nodename"]] == "riptide.local"){
    shinyOptions <- list(host="0.0.0.0", launch.browser=TRUE)
    }
-app <- shinyApp(ui, server, options=shinyOptions)
+shinyApp(ui, server, options=shinyOptions)
 #app <- shinyApp(ui, server)
-runApp(app)
+#runApp(app)
 
