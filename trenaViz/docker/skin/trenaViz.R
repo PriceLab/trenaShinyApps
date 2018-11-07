@@ -28,12 +28,12 @@ model.count <- 0   # for creating default model names
 # for non-interactive sessions, we require the projectName to be defined on the command line:
 #  R -f trenaViz.R --args TrenaProjectIGAP
 
-args <- commandArgs(trailingOnly=TRUE)
-
-if(length(args) == 1)
-   projectName <- args[1]
-
-stopifnot(exists("projectName"))
+#args <- commandArgs(trailingOnly=TRUE)
+#
+#if(length(args) == 1)
+#   projectName <- args[1]
+#stopifnot(exists("projectName"))
+projectName <- "TrenaProjectSkin"
 
 library(projectName, character.only=TRUE)
 initialization.command <- sprintf("trenaProject <- %s()", projectName)

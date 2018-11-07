@@ -16,3 +16,13 @@ dockerRun:
 
 dockerView:
 	open http://localhost:60042
+
+save:
+	time docker save trena_skin:latest >  ~/tmp/dockerSkin.save
+	ls -lat ~/tmp/dockerSkin.save
+
+scp:
+	time scp ~/tmp/dockerSkin.save pshannon@trena:/local/tmp/
+	ssh pshannon@trena ls -l /local/tmp/dockerSkin.save
+	ssh pshannon@trena docker load < /local/tmp/dockerSkin.save
+

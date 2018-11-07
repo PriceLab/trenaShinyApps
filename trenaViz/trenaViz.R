@@ -92,10 +92,22 @@ additionalTracksOnOffer <- function()
 {
    trackOfferings <- list("",
                           "Enhancers"="enhancers",
-                          "DHS open chromatin (encode, clustered)"="dhs")
+                          "DNase HS (encode, clustered)"="dhs")
+
    variantTrackNames <- getVariantDatasetNames(trenaProject)
-   if(length(variantTrackNames) > 0)
-      trackOfferings <- c(trackOfferings, variantTrackNames)
+
+   for(i in seq_len(length(variantTrackNames))){
+      trackName <- variantTrackNames[i]
+      if(grepl("gwas", trackName, ignore.case=TRUE))
+         new.list <- c("gwas")
+         names(new.list) <- trackName
+         trackOfferings <- c(trackOfferings, new.list)
+      if(grepl("wgs.variants", trackName, ignore.case=TRUE)){
+         new.list <- c("wgs.variants")
+         names(new.list) <- trackName
+         trackOfferings <- c(trackOfferings, new.list)
+         } # if wgs.variants in the name
+      } # for i
 
    return(trackOfferings)
 
@@ -390,14 +402,18 @@ setupAddTrack <- function(session, input, output)
 displayTrack <- function(session, trackName)
 {
    supportedTracks <- c("enhancers",
-                        "dhs")
+                        "dhs",
+                        "gwas",
+                        "wgs.variants",
+                        "dataframeVCF")
 
    printf("--- displayTrack('%s')", trackName)
 
    switch(trackName,
           enhancers    = {displayEnhancersTrack(session)},
           dhs          = {displayEncodeDhsTrack(session)},
-          gwas         = {displayGWASTrack(session)}
+          gwas         = {displayGWASTrack(session, trackName)},
+          wgs.variants = {displayGWASTrack(session, trackName)}
           )
 
 } # displayTrack
@@ -419,14 +435,25 @@ displayEncodeDhsTrack <- function(session)
 
 } # displayEncodeDhsTrack
 #------------------------------------------------------------------------------------------------------------------------
-displayGWASTrack <- function(session)
+displayGWASTrack <- function(session, trackName)
 {
    variantDatasetNames <- getVariantDatasetNames(trenaProject)
-   gwas.dataset.name <- grep("gwas", variantDatasetNames, ignore.case=TRUE, value=TRUE)
-   if(length(gwas.dataset.name) > 0){
-     tbl.gwas <- getVariantDataset(trenaProject, gwas.dataset.name[1])
-     tbl.tmp <- tbl.gwas[, c("chrom", "start", "end", "pScore")]
-     loadBedGraphTrack(session, "GWAS snp", tbl.tmp, color="red", trackHeight=25, autoscale=FALSE, min=0, max=10)
+   printf("want to see trackName (%s) among variantDatasetNames", trackName)
+   print(paste(variantDatasetNames, collapse=", "))
+
+   variant.dataset.name <- grep(trackName, variantDatasetNames, ignore.case=TRUE, value=TRUE)
+   printf("  --- found %s to display", variant.dataset.name)
+   printf(" want to restrict variant table to this region: %s", state$chromLocRegion)
+   loc <- parseChromLocString(state$chromLocRegion)
+
+   if(length(variant.dataset.name) > 0){
+     tbl.variant <- getVariantDataset(trenaProject, variant.dataset.name[1])
+     if(length(colnames(tbl.variant)) > 4){  # TODO
+        tbl.variant <- tbl.variant[, c("chrom", "start", "end", "pScore")]
+        colnames(tbl.variant) <- c("chrom", "start", "end", "value")
+        }
+     tbl.variant <- subset(tbl.variant, chrom==loc$chrom & start >= loc$start & end <= loc$end)
+     loadBedGraphTrack(session, trackName, tbl.variant, color="red", trackHeight=25, autoscale=TRUE) # , min=0, max=10)
      }
 
 } # displayVariantsTrack
