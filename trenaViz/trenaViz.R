@@ -72,12 +72,8 @@ createSidebar <- function()
         actionButton(inputId = "igvHideButton", label = "Toggle IGV"),
         actionButton(inputId = "tableHideButton", label = "Toggle table"),
         selectInput("chooseGene", "Choose Gene:", c("", getSupportedGenes(trenaProject))),
+        trackList <-
         selectInput("addTrack", "Add Track:", additionalTracksOnOffer()),
-                   # c("",
-                   #  "Enhancers"="enhancers",
-                   #  "DHS open chromatin (encode, clustered)"="dhs",
-                   #  "IGAP GWAS variants"="gwas"
-                   #  )),
         selectInput("displayGenomicRegion", "Display Genomic Region:",
                     c("",
                       "Full Gene" = "fullGeneRegion",
@@ -98,15 +94,17 @@ additionalTracksOnOffer <- function()
 
    for(i in seq_len(length(variantTrackNames))){
       trackName <- variantTrackNames[i]
-      if(grepl("gwas", trackName, ignore.case=TRUE))
-         new.list <- c("gwas")
+      if(grepl("gwas", trackName, ignore.case=TRUE)){
+         new.list <- c(trackName)
          names(new.list) <- trackName
          trackOfferings <- c(trackOfferings, new.list)
+         } # if 'gwas' in the name
       if(grepl("wgs.variants", trackName, ignore.case=TRUE)){
-         new.list <- c("wgs.variants")
+         new.list <- c(trackName)
+         #new.list <- c("wgs.variants")
          names(new.list) <- trackName
          trackOfferings <- c(trackOfferings, new.list)
-         } # if wgs.variants in the name
+         } # if 'wgs.variants' in the name
       } # for i
 
    return(trackOfferings)
@@ -159,7 +157,7 @@ createBody <- function()
                       #wellPanel(
                         h4("TF selection will display:"),
                         selectInput("selectRowAction", NULL,  c("(no action)", "Footprints", "ChIP-seq hits",
-                                                                sprintf("Plot expression, TF vs %s", getTargetGene(trenaProject))))
+                                                                sprintf("Plot expression, TF vs target gene")))
                       ) # column
                ) # fluidRow
             ), # tabItem 1
@@ -401,20 +399,32 @@ setupAddTrack <- function(session, input, output)
 #------------------------------------------------------------------------------------------------------------------------
 displayTrack <- function(session, trackName)
 {
-   supportedTracks <- c("enhancers",
-                        "dhs",
-                        "gwas",
-                        "wgs.variants",
-                        "dataframeVCF")
+   # supportedTracks <- c("enhancers",
+   #                    "dhs",
+   #                     "gwas",
+   #                     "wgs.variants",
+   #                     "dataframeVCF")
 
    printf("--- displayTrack('%s')", trackName)
 
-   switch(trackName,
-          enhancers    = {displayEnhancersTrack(session)},
-          dhs          = {displayEncodeDhsTrack(session)},
-          gwas         = {displayGWASTrack(session, trackName)},
-          wgs.variants = {displayGWASTrack(session, trackName)}
-          )
+   if(grepl("wgs.variants", trackName, ignore.case=TRUE))
+      displayGWASTrack(session, trackName)
+
+   if(grepl("gwas", trackName, ignore.case=TRUE))
+      displayGWASTrack(session, trackName)
+
+   if(trackName == "enhancers")
+      displayEnhancersTrack(session)
+
+   if(trackName == "dhs")
+      displayEncodeDhsTrack(session)
+
+   #switch(trackName,
+   #       enhancers    = {displayEnhancersTrack(session)},
+   #       dhs          = {displayEncodeDhsTrack(session)},
+   #       gwas         = {displayGWASTrack(session, trackName)},
+   #       wgs.variants = {displayGWASTrack(session, trackName)}
+   #       )
 
 } # displayTrack
 #------------------------------------------------------------------------------------------------------------------------
@@ -441,20 +451,21 @@ displayGWASTrack <- function(session, trackName)
    printf("want to see trackName (%s) among variantDatasetNames", trackName)
    print(paste(variantDatasetNames, collapse=", "))
 
-   variant.dataset.name <- grep(trackName, variantDatasetNames, ignore.case=TRUE, value=TRUE)
-   printf("  --- found %s to display", variant.dataset.name)
-   printf(" want to restrict variant table to this region: %s", state$chromLocRegion)
-   loc <- parseChromLocString(state$chromLocRegion)
-
-   if(length(variant.dataset.name) > 0){
-     tbl.variant <- getVariantDataset(trenaProject, variant.dataset.name[1])
-     if(length(colnames(tbl.variant)) > 4){  # TODO
-        tbl.variant <- tbl.variant[, c("chrom", "start", "end", "pScore")]
-        colnames(tbl.variant) <- c("chrom", "start", "end", "value")
+   if(trackName %in% variantDatasetNames){
+      printf("  --- found %s to display", trackName)
+      printf(" want to restrict variant table to this region: %s", state$chromLocRegion)
+      loc <- parseChromLocString(state$chromLocRegion)
+      tbl.variant <- getVariantDataset(trenaProject, trackName)
+      if(trackName == "GWAS.snps"){
+         tbl.variant <- tbl.variant[, c("chrom", "start", "end", "pScore")]
+         colnames(tbl.variant) <- c("chrom", "start", "end", "value")
         }
-     tbl.variant <- subset(tbl.variant, chrom==loc$chrom & start >= loc$start & end <= loc$end)
-     loadBedGraphTrack(session, trackName, tbl.variant, color="red", trackHeight=25, autoscale=TRUE) # , min=0, max=10)
-     }
+      tbl.variant <- subset(tbl.variant, chrom==loc$chrom & start >= loc$start & end <= loc$end)
+      printf("%d regions in %s", nrow(tbl.variant), trackName)
+      showNotification(sprintf("%s: %d genomic features", trackName, nrow(tbl.variant)))
+      if(nrow(tbl.variant) > 0)
+         loadBedGraphTrack(session, trackName, tbl.variant, color="red", trackHeight=25, autoscale=TRUE) # , min=0, max=10)
+      } # trackName found in variant data sets
 
 } # displayVariantsTrack
 #------------------------------------------------------------------------------------------------------------------------
@@ -488,9 +499,11 @@ setupBuildModel <- function(session, input, output)
        displayModel(session, input, output, new.table, modelName)
        })
 
-   observeEvent(input$modelNameTextInput, {
-       currentName <- isolate(input$modelNameTextInput)
-       if(nchar(currentName) >= 1)
+   observe({
+       currentName <- input$modelNameTextInput
+       expressionMatrixName <- input$expressionSet
+       allInputsSpecified <- nchar(currentName) >= 1 & nchar(expressionMatrixName) > 2
+       if(allInputsSpecified)
           shinyjs::enable("buildModelButton")
        else
           shinyjs::disable("buildModelButton")
@@ -500,27 +513,23 @@ setupBuildModel <- function(session, input, output)
       getGenomicRegion(session)
       state$tbl.chipSeq <- NULL   # this will force a fresh database query after model is built
       shinyjs::html(id="console", html="", add=FALSE)  # clear the console
-      withCallingHandlers(
-                          {buildModel(session, input, output);
-                           model.count <- length(state$models)
-                           new.model.name <- names(state$models)[model.count]
-                           new.table <- state$models[[model.count]]$model
-                           displayModel(session, input, output, new.table, new.model.name)
-                           updateTabItems(session, "sidebarMenu", select="igvAndTable")
-                           },
-         message=function(m){
-            #printf("got message for console");
-            #print(m)
-            shinyjs::html(id="console", html=m$message, add=TRUE)
-            })
-      #message(sprintf("back from buildModel, current models are %s", paste(names(state$models), collapse=", ")))
-      #model.count <- length(state$models)
-      #new.model.name <- names(state$models)[model.count]
-      #new.table <- state$models[[model.count]]$model
-      #output$buildInProgressTextArea <- renderText("build complete")
-      #displayModel(session, input, output, new.table, new.model.name)
-      #updateTabItems(session, "sidebarMenu", select="igvAndTable")
-      })
+      tryCatch({
+          withCallingHandlers({buildModel(session, input, output);
+                               model.count <- length(state$models)
+                               new.model.name <- names(state$models)[model.count]
+                               new.table <- state$models[[model.count]]$model
+                               displayModel(session, input, output, new.table, new.model.name)
+                               updateTabItems(session, "sidebarMenu", select="igvAndTable")
+                               },
+             message=function(m){
+             shinyjs::html(id="console", html=m$message, add=TRUE)
+             })
+          }, error=function(e){
+               msg <- e$message
+               print(msg)
+               showModal(modalDialog(title="trena model building error", msg))
+               }) # tryCatch
+      }) # observe buildModelButton
 
 } # setupBuildModel
 #------------------------------------------------------------------------------------------------------------------------
