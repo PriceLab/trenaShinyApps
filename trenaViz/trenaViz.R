@@ -9,7 +9,6 @@ library(DT)
 library(VariantAnnotation)
 #------------------------------------------------------------------------------------------------------------------------
 library(trenaSGM)
-library(TrenaProjectSkin)
 #------------------------------------------------------------------------------------------------------------------------
 library(RColorBrewer)
 colors <- brewer.pal(8, "Dark2")
@@ -40,8 +39,6 @@ initialization.command <- sprintf("trenaProject <- %s()", projectName)
 eval(parse(text=initialization.command))
 setTargetGene(trenaProject, getSupportedGenes(trenaProject)[1])
 printf("targetGene: %s", getTargetGene(trenaProject))
-#trenaProject <- TrenaProjectSkin();
-#setTargetGene(trenaProject, getSupportedGenes(trenaProject)[1])
 
 state$chromLocRegion <- getGeneRegion(trenaProject, flankingPercent=20)
 expressionMatrixNames <- getExpressionMatrixNames(trenaProject)
@@ -65,7 +62,8 @@ createSidebar <- function()
   dashboardSidebar(
     sidebarMenu(id="sidebarMenu",
        menuItem("IGV and Current Models", tabName = "igvAndTable"),
-       menuItem("Build a new Model",      tabName = "buildModels")
+       menuItem("Build a new Model",      tabName = "buildModels"),
+       menuItem("Introductory video",     tabName = "video")
       ),
     conditionalPanel(id="igvTableWidgets",
         condition = "input.sidebarMenu == 'igvAndTable'",
@@ -143,6 +141,16 @@ createBuildModelTab <- function()
 
 } # createBuildModelTab
 #------------------------------------------------------------------------------------------------------------------------
+createVideoTab <- function()
+{
+   tab <- tabItem(tabName="video",
+                  h4("Using trenaViz: a video tutorial"),
+                  includeHTML("videoTutorial.html")
+                  )
+   return(tab)
+
+} # createVideoTab
+#------------------------------------------------------------------------------------------------------------------------
 createBody <- function()
 {
    body <- #fluidRow(
@@ -161,7 +169,8 @@ createBody <- function()
                       ) # column
                ) # fluidRow
             ), # tabItem 1
-         createBuildModelTab()
+         createBuildModelTab(),
+         createVideoTab()
          ) # tabItems
 
    return(body)
@@ -185,6 +194,7 @@ ui <- dashboardPage(
           border-radius: 5px;
           margin: 5px;
           margin-right: 15px;
+          overflow: hidden;
           }
         #table{
           border: 1px solid black;
@@ -491,13 +501,17 @@ setupDisplayRegion <- function(session, input, output)
 #------------------------------------------------------------------------------------------------------------------------
 setupBuildModel <- function(session, input, output)
 {
-
    observeEvent(input$modelSelector, ignoreInit=TRUE, {
        modelName <- isolate(input$modelSelector)
        printf("--- new model selected: %s", modelName)
        new.table <- state$models[[modelName]]$model
        displayModel(session, input, output, new.table, modelName)
        })
+
+   observe({
+      x <- input$sidebarCollapsed;
+      redrawIgvWidget(session)
+      })
 
    observe({
        currentName <- input$modelNameTextInput
