@@ -2,17 +2,18 @@ build:
 	docker build -t trenaigap:test -f Dockerfile .
 
 bash:
-	docker run -ti --rm -p 60042:3838 trenaigap bash
+	docker run -ti --rm -p 60043:3838 trenaigap:test bash
 
 dockerRun:
-	docker run -p 60042:3838 trenaigap:test
+	docker run -p 60043:3838 trenaigap:test
 
 dockerView:
-	open http://localhost:60042
+	open http://localhost:60043
 
 save:
 	time docker save trenaigap:latest >  ~/tmp/dockerIGAP.save
 	ls -lat ~/tmp/dockerIGAP.save
+
 saveTest:
 	time docker save trenaigap:test >  ~/tmp/dockerIGAP.test.save
 	ls -lat ~/tmp/dockerIGAP.test.save

@@ -27,10 +27,9 @@ model.count <- 0   # for creating default model names
 # for non-interactive sessions, we require the projectName to be defined on the command line:
 #  R -f trenaViz.R --args TrenaProjectIGAP
 
-args <- commandArgs(trailingOnly=TRUE)
-
 projectName <- "TrenaProjectIGAP"
 
+args <- commandArgs(trailingOnly=TRUE)
 if(length(args) == 1)
    projectName <- args[1]
 
@@ -61,11 +60,11 @@ state$tbl.transcripts <- getTranscriptsTable(trenaProject)
 #------------------------------------------------------------------------------------------------------------------------
 createSidebar <- function()
 {
-   dashboardSidebar(
-      # tags$script("$(document).on('click', '.sidebar-toggle', function () {console.log("toggle!")})"),
-      sidebarMenu(id="sidebarMenu",
+  dashboardSidebar(
+    sidebarMenu(id="sidebarMenu",
        menuItem("IGV and Current Models", tabName = "igvAndTable"),
-       menuItem("Build a new Model",      tabName = "buildModels")
+       menuItem("Build a new Model",      tabName = "buildModels"),
+       menuItem("Introductory video",     tabName = "video")
       ),
     conditionalPanel(id="igvTableWidgets",
         condition = "input.sidebarMenu == 'igvAndTable'",
@@ -143,6 +142,16 @@ createBuildModelTab <- function()
 
 } # createBuildModelTab
 #------------------------------------------------------------------------------------------------------------------------
+createVideoTab <- function()
+{
+   tab <- tabItem(tabName="video",
+                  h4("Using trenaViz: a video tutorial"),
+                  includeHTML("videoTutorial.html")
+                  )
+   return(tab)
+
+} # createVideoTab
+#------------------------------------------------------------------------------------------------------------------------
 createBody <- function()
 {
    body <- #fluidRow(
@@ -161,7 +170,8 @@ createBody <- function()
                       ) # column
                ) # fluidRow
             ), # tabItem 1
-         createBuildModelTab()
+         createBuildModelTab(),
+         createVideoTab()
          ) # tabItems
 
    return(body)
@@ -185,6 +195,7 @@ ui <- dashboardPage(
           border-radius: 5px;
           margin: 5px;
           margin-right: 15px;
+          overflow: hidden;
           }
         #table{
           border: 1px solid black;
@@ -198,12 +209,7 @@ ui <- dashboardPage(
 #------------------------------------------------------------------------------------------------------------------------
 server <- function(session, input, output){
 
-   observe(input$hideSidebar, {
-               printf("sidebar hiding")
-               })
-
    observeEvent(input$chooseGene, ignoreInit=TRUE, {
-
        newGene <- isolate(input$chooseGene)
        setTargetGene(trenaProject, newGene)
        showGenomicRegion(session, getGeneRegion(trenaProject, flankingPercent=20))
@@ -274,16 +280,6 @@ setupIgvAndTableToggling <- function(session, input)
        state$chromLocRegion <- newValue
        # printf("currentGenomicRegion arrived, %s", newValue)
        })
-
-   shinyjs::onclick(selector=".sidebar-toggle", print("toggle"))
-
-   $(document).on("shiny:visualchange", function(event){
-                     printf("target: %s", event.target.id)
-                  })
-
-   observe(input$sidebarCollapsed, {
-      printf("sidebar collapsed")
-      })
 
    observeEvent(input$igvHideButton, {
      if(input$igvHideButton %% 2 == 1){
@@ -506,13 +502,17 @@ setupDisplayRegion <- function(session, input, output)
 #------------------------------------------------------------------------------------------------------------------------
 setupBuildModel <- function(session, input, output)
 {
-
    observeEvent(input$modelSelector, ignoreInit=TRUE, {
        modelName <- isolate(input$modelSelector)
        printf("--- new model selected: %s", modelName)
        new.table <- state$models[[modelName]]$model
        displayModel(session, input, output, new.table, modelName)
        })
+
+   observe({
+      x <- input$sidebarCollapsed;
+      redrawIgvWidget(session)
+      })
 
    observe({
        currentName <- input$modelNameTextInput
@@ -843,3 +843,6 @@ if(Sys.info()[["nodename"]] == "riptide.local"){
    shinyOptions <- list(host="0.0.0.0", launch.browser=TRUE)
    }
 app <- shinyApp(ui, server, options=shinyOptions)
+#app <- shinyApp(ui, server)
+#runApp(app)
+
