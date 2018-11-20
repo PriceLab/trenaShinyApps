@@ -97,7 +97,7 @@ additionalTracksOnOffer <- function()
          names(new.list) <- trackName
          trackOfferings <- c(trackOfferings, new.list)
          } # if 'gwas' in the name
-      if(grepl(".variants", trackName, ignore.case=TRUE)){
+      if(grepl(".variants", trackName, ignore.case=TRUE, fixed=TRUE)){
          new.list <- c(trackName)
          names(new.list) <- trackName
          trackOfferings <- c(trackOfferings, new.list)
@@ -432,7 +432,7 @@ displayTrack <- function(session, trackName)
 
    printf("--- displayTrack('%s')", trackName)
 
-   if(grepl(".variants", trackName, ignore.case=TRUE))
+   if(grepl(".variants", trackName, ignore.case=TRUE, fixed=TRUE))
       displayBedTrack(session, trackName)
 
    if(grepl("gwas", trackName, ignore.case=TRUE))
