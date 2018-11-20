@@ -1,4 +1,4 @@
-# trenaVzi.R:  build models for, and explore genomics of, a TrenaProject subclass
+# trenaViz.R:  build models for, and explore genomics of, a TrenaProject subclass
 #------------------------------------------------------------------------------------------------------------------------
 library(shiny)
 library(shinydashboard)
@@ -292,8 +292,9 @@ setupIgvAndTableToggling <- function(session, input)
         shinyjs::toggleClass("dataTableColumn", "col-sm-3")
         shinyjs::show(id = "igvColumn")
         }
-      printf("--- calling redrawIgvWidget")
+      printf("--- calling redrawIgvWidget after igv toggle button")
       redrawIgvWidget(session)
+      redrawModelDataTable()
       })
 
    observeEvent(input$tableHideButton, {
@@ -310,10 +311,25 @@ setupIgvAndTableToggling <- function(session, input)
          shinyjs::show(id = "dataTableColumn")
          shinyjs::show(id = "modelSelectorColumn")
          }
-      printf("--- calling redrawIgvWidget")
+      printf("--- calling redrawIgvWidget after table toggle button")
       redrawIgvWidget(session)
+      redrawModelDataTable()
       })
+
 } # setupIgvAndTableToggling
+#------------------------------------------------------------------------------------------------------------------------
+redrawModelDataTable <- function()
+{
+      # columns.adjust not actually needed, except perhaps if the column names have changed
+      # jQuery.string <- "$('#table table.dataTable[id]').DataTable().columns.adjust().draw();"
+      #
+
+      # it is not at all clear where and how [id] is resolved by the js interpreter in the browser
+
+  jQuery.string <- "$('#table table.dataTable[id]').DataTable().draw();"
+  shinyjs::runjs(jQuery.string)
+
+} # redrawModelDataTable
 #------------------------------------------------------------------------------------------------------------------------
 mapToChromLoc <- function(regionName)
 {
