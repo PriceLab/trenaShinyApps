@@ -4,7 +4,7 @@ COPY Rprofile.site /usr/local/lib/R/etc/
 USER trena
 WORKDIR /home/trena/app
 COPY packages/*gz ./
-RUN R CMD INSTALL -l ~/library TrenaProjectIGAP_0.99.11.tar.gz
+RUN R CMD INSTALL -l ~/library TrenaProjectPlacenta_0.99.5.tar.gz
 EXPOSE 3838
 COPY videoTutorial.html .
 COPY trenaViz.R .

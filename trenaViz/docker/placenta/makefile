@@ -1,29 +1,29 @@
 build:
-	docker build -t trenaigap:test -f Dockerfile .
+	docker build -t trenaplacenta -f Dockerfile .
 
 bash:
-	docker run -ti --rm -p 60043:3838 trenaigap:test bash
+	docker run -ti --rm -p 60043:3838 trenaplacenta bash
 
 dockerRun:
-	docker run -p 60043:3838 trenaigap:test
+	docker run -p 60043:3838 trenaplacenta
 
 dockerView:
 	open http://localhost:60043
 
 save:
-	time docker save trenaigap:latest >  ~/tmp/dockerIGAP.save
-	ls -lat ~/tmp/dockerIGAP.save
+	time docker save trenaplacenta:latest >  ~/tmp/dockerPLACENTA.save
+	ls -lat ~/tmp/dockerPLACENTA.save
 
 saveTest:
-	time docker save trenaigap:test >  ~/tmp/dockerIGAP.test.save
-	ls -lat ~/tmp/dockerIGAP.test.save
+	time docker save trenaplacenta >  ~/tmp/dockerPLACENTA.test.save
+	ls -lat ~/tmp/dockerPLACENTA.test.save
 
 scp:
-	time scp ~/tmp/dockerIGAP.save pshannon@trena:/local/tmp/
-	ssh pshannon@trena ls -l /local/tmp/dockerIGAP.save
-#	ssh pshannon@trena docker load < /local/tmp/dockerIGAP.save
+	time scp ~/tmp/dockerPLACENTA.save pshannon@trena:/local/tmp/
+	ssh pshannon@trena ls -l /local/tmp/dockerPLACENTA.save
+#	ssh pshannon@trena docker load < /local/tmp/dockerPLACENTA.save
 
 scpTest:
-	time scp ~/tmp/dockerIGAP.test.save pshannon@trena:/local/tmp/
-	ssh pshannon@trena ls -l /local/tmp/dockerIGAP.test.save
+	time scp ~/tmp/dockerPLACENTA.test.save pshannon@trena:/local/tmp/
+	ssh pshannon@trena ls -l /local/tmp/dockerPLACENTA.test.save
 
