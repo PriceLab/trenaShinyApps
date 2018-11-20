@@ -1,7 +1,7 @@
-all:  trenaProjectIGAP
+all:  trenaProjectPlacenta
 
-trenaProjectIGAP:
-	R CMD build --no-build-vignettes ~/github/TrenaProjectIGAP
+trenaProjectPlacenta:
+	R CMD build --no-build-vignettes ~/github/TrenaProjectPlacenta
 
 
 
