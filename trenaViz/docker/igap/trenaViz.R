@@ -1,4 +1,4 @@
-# trenaVzi.R:  build models for, and explore genomics of, a TrenaProject subclass
+# trenaViz.R:  build models for, and explore genomics of, a TrenaProject subclass
 #------------------------------------------------------------------------------------------------------------------------
 library(shiny)
 library(shinydashboard)
@@ -27,9 +27,10 @@ model.count <- 0   # for creating default model names
 # for non-interactive sessions, we require the projectName to be defined on the command line:
 #  R -f trenaViz.R --args TrenaProjectIGAP
 
+args <- commandArgs(trailingOnly=TRUE)
+
 projectName <- "TrenaProjectIGAP"
 
-args <- commandArgs(trailingOnly=TRUE)
 if(length(args) == 1)
    projectName <- args[1]
 
@@ -98,12 +99,11 @@ additionalTracksOnOffer <- function()
          names(new.list) <- trackName
          trackOfferings <- c(trackOfferings, new.list)
          } # if 'gwas' in the name
-      if(grepl("wgs.variants", trackName, ignore.case=TRUE)){
+      if(grepl(".variants", trackName, ignore.case=TRUE)){
          new.list <- c(trackName)
-         #new.list <- c("wgs.variants")
          names(new.list) <- trackName
          trackOfferings <- c(trackOfferings, new.list)
-         } # if 'wgs.variants' in the name
+         } # if '.variants' in the name
       } # for i
 
    return(trackOfferings)
@@ -293,8 +293,9 @@ setupIgvAndTableToggling <- function(session, input)
         shinyjs::toggleClass("dataTableColumn", "col-sm-3")
         shinyjs::show(id = "igvColumn")
         }
-      printf("--- calling redrawIgvWidget")
+      printf("--- calling redrawIgvWidget after igv toggle button")
       redrawIgvWidget(session)
+      redrawModelDataTable()
       })
 
    observeEvent(input$tableHideButton, {
@@ -311,10 +312,25 @@ setupIgvAndTableToggling <- function(session, input)
          shinyjs::show(id = "dataTableColumn")
          shinyjs::show(id = "modelSelectorColumn")
          }
-      printf("--- calling redrawIgvWidget")
+      printf("--- calling redrawIgvWidget after table toggle button")
       redrawIgvWidget(session)
+      redrawModelDataTable()
       })
+
 } # setupIgvAndTableToggling
+#------------------------------------------------------------------------------------------------------------------------
+redrawModelDataTable <- function()
+{
+      # columns.adjust not actually needed, except perhaps if the column names have changed
+      # jQuery.string <- "$('#table table.dataTable[id]').DataTable().columns.adjust().draw();"
+      #
+
+      # it is not at all clear where and how [id] is resolved by the js interpreter in the browser
+
+  jQuery.string <- "$('#table table.dataTable[id]').DataTable().draw();"
+  shinyjs::runjs(jQuery.string)
+
+} # redrawModelDataTable
 #------------------------------------------------------------------------------------------------------------------------
 mapToChromLoc <- function(regionName)
 {
@@ -418,11 +434,11 @@ displayTrack <- function(session, trackName)
 
    printf("--- displayTrack('%s')", trackName)
 
-   if(grepl("wgs.variants", trackName, ignore.case=TRUE))
-      displayGWASTrack(session, trackName)
+   if(grepl(".variants", trackName, ignore.case=TRUE))
+      displayBedTrack(session, trackName)
 
    if(grepl("gwas", trackName, ignore.case=TRUE))
-      displayGWASTrack(session, trackName)
+      displayBedTrack(session, trackName)
 
    if(trackName == "enhancers")
       displayEnhancersTrack(session)
@@ -478,7 +494,27 @@ displayGWASTrack <- function(session, trackName)
          loadBedGraphTrack(session, trackName, tbl.variant, color="red", trackHeight=25, autoscale=TRUE) # , min=0, max=10)
       } # trackName found in variant data sets
 
-} # displayVariantsTrack
+} # displayGWASTrack
+#------------------------------------------------------------------------------------------------------------------------
+displayBedTrack <- function(session, trackName)
+{
+   variantDatasetNames <- getVariantDatasetNames(trenaProject)
+   printf("want to see trackName (%s) among variantDatasetNames", trackName)
+   print(paste(variantDatasetNames, collapse=", "))
+
+   if(trackName %in% variantDatasetNames){
+      printf("  --- found %s to display", trackName)
+      printf(" want to restrict variant table to this region: %s", state$chromLocRegion)
+      loc <- parseChromLocString(state$chromLocRegion)
+      tbl.variant <- getVariantDataset(trenaProject, trackName)
+      tbl.variant <- subset(tbl.variant, chrom==loc$chrom & start >= loc$start & end <= loc$end)
+      printf("%d regions in %s", nrow(tbl.variant), trackName)
+      showNotification(sprintf("%s: %d genomic features", trackName, nrow(tbl.variant)))
+      if(nrow(tbl.variant) > 0)
+         loadBedTrack(session, trackName, tbl.variant, color="red", trackHeight=25)
+      } # trackName found in variant data sets
+
+} # displayBedTrack
 #------------------------------------------------------------------------------------------------------------------------
 setupDisplayRegion <- function(session, input, output)
 {
